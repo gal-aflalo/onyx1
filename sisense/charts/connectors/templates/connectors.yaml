@@ -1,0 +1,310 @@
+{{- $deploymentname := include "connectors.name" . }}
+{{- $deployment := (lookup "apps/v1" "Deployment" .Release.Namespace $deploymentname ) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "connectors.name" . }}
+  labels: {{- include "connectors.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "connectors.name" . }}
+  {{- if $deployment }}
+  replicas: {{ coalesce (lookup "apps/v1" "Deployment" .Release.Namespace $deploymentname ).spec.replicas 0 | int }}
+  {{- else }}
+  replicas: 0
+  {{- end }}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- else if eq .Values.global.imageRegistry "docker.artifactory.sisense.com"}}
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  {{- end }}
+  template:
+    metadata:
+      labels: {{- include "connectors.labels" . | nindent 8 }}
+        {{- if .Values.global.exposeNodePorts.enabled }}
+        network_policy: bypass
+        {{- end }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "connectors.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.global.clusterMode.enabled }}
+      nodeSelector:
+        node-{{.Release.Namespace}}-Application: "true"
+      {{- end }}
+      containers:
+      - env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        - name: NAMESPACE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: NAMESPACE_NAME
+        - name: COM_CONN
+          value: "connectors.$(NAMESPACE_NAME)"
+        - name: ZK_CONN
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: ZOOKEEPER_CONN_STRING
+        - name: TZ
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: TZ
+        - name: SISENSE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: SISENSE_VERSION
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        command:
+          - "/bin/sh"
+          - "-c"
+          - >
+             /opt/sisense/jvmConnectors/cpconfigs.sh;
+             find /opt/sisense/storage/connectors \( ! -user {{ .Values.securityContext.runAsUser }} -o ! -group {{ .Values.securityContext.runAsGroup }} \) -exec chown -vc {{ .Values.securityContext.runAsUser }}:{{ .Values.securityContext.runAsGroup }} {} +;
+             java -Xms128M -Dlog4j2.formatMsgNoLookups=true -jar connectorService.jar jvmcontainer_1_1_0.jar /opt/sisense/jvmConnectors/connectors $ZK_CONN $COM_CONN;
+        name: {{ template "connectors.name" . }}
+        resources:
+          limits: 
+            cpu: {{ include "connectors.limits.cpu" . }}
+            memory: {{ include "connectors.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        ports:
+         - containerPort: 8097
+         - containerPort: 43795
+         - containerPort: 9000
+         - containerPort: 9001
+         - containerPort: 9002
+         - containerPort: 9003
+         - containerPort: 9004
+         - containerPort: 9005
+         - containerPort: 9006
+         - containerPort: 9007
+         - containerPort: 9008
+         - containerPort: 9009
+         - containerPort: 9010
+         - containerPort: 9011
+         - containerPort: 9012
+         - containerPort: 9013
+         - containerPort: 9014
+         - containerPort: 9015
+         - containerPort: 9016
+         - containerPort: 9017
+         - containerPort: 9018
+         - containerPort: 9019
+         - containerPort: 9020
+         - containerPort: 9021
+         - containerPort: 9022
+         - containerPort: 9023
+         - containerPort: 9024
+         - containerPort: 9025
+         - containerPort: 9026
+         - containerPort: 9027
+         - containerPort: 9028
+         - containerPort: 9029
+         - containerPort: 9030
+        volumeMounts:
+        - mountPath: /opt/sisense/storage
+          name: storage
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      volumes:
+{{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+{{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+{{- end }}
+      restartPolicy: Always
+      initContainers:
+      - name: init-zookeeper
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv {{ .Release.Name }}-zookeeper.{{ .Release.Namespace }} 2181 -w1; do echo waiting for zookeeper; sleep 2; done;']
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels: {{- include "connectors.labels" . | nindent 4 }}
+  name: {{ template "connectors.name" . }}
+spec:
+  ports:
+   - name: "tcp-1"
+     port: 8097
+     targetPort: 8097
+   - name: "tcp-2"
+     port: 43795
+     targetPort: 43795
+   - name: "tcp-3"
+     port: 9000
+     targetPort: 9000
+   - name: "tcp-4"
+     port: 9001
+     targetPort: 9001
+   - name: "tcp-5"
+     port: 9002
+     targetPort: 9002
+   - name: "tcp-6"
+     port: 9003
+     targetPort: 9003
+   - name: "tcp-7"
+     port: 9004
+     targetPort: 9004
+   - name: "tcp-8"
+     port: 9005
+     targetPort: 9005
+   - name: "tcp-9"
+     port: 9006
+     targetPort: 9006
+   - name: "tcp-10"
+     port: 9007
+     targetPort: 9007
+   - name: "tcp-11"
+     port: 9008
+     targetPort: 9008
+   - name: "tcp-12"
+     port: 9009
+     targetPort: 9009
+   - name: "tcp-13"
+     port: 9010
+     targetPort: 9010
+   - name: "tcp-14"
+     port: 9011
+     targetPort: 9011
+   - name: "tcp-15"
+     port: 9012
+     targetPort: 9012
+   - name: "tcp-16"
+     port: 9013
+     targetPort: 9013
+   - name: "tcp-17"
+     port: 9014
+     targetPort: 9014
+   - name: "tcp-18"
+     port: 9015
+     targetPort: 9015
+   - name: "tcp-19"
+     port: 9016
+     targetPort: 9016
+   - name: "tcp-20"
+     port: 9017
+     targetPort: 9017
+   - name: "tcp-21"
+     port: 9018
+     targetPort: 9018
+   - name: "tcp-22"
+     port: 9019
+     targetPort: 9019
+   - name: "tcp-23"
+     port: 9020
+     targetPort: 9020
+   - name: "tcp-24"
+     port: 9021
+     targetPort: 9021
+   - name: "tcp-25"
+     port: 9022
+     targetPort: 9022
+   - name: "tcp-26"
+     port: 9023
+     targetPort: 9023
+   - name: "tcp-27"
+     port: 9024
+     targetPort: 9024
+   - name: "tcp-28"
+     port: 9025
+     targetPort: 9025
+   - name: "tcp-29"
+     port: 9026
+     targetPort: 9026
+   - name: "tcp-30"
+     port: 9027
+     targetPort: 9027
+   - name: "tcp-31"
+     port: 9028
+     targetPort: 9028
+   - name: "tcp-32"
+     port: 9029
+     targetPort: 9029
+   - name: "tcp-33"
+     port: 9030
+     targetPort: 9030
+  type: ClusterIP
+  selector:
+    app: {{ template "connectors.name" . }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels: {{- include "connectors.labels" . | nindent 4 }}
+  name: {{ template "connectors.name" . }}-debug
+spec:
+  selector:
+    app: {{ template "connectors.name" . }}
+  ports:
+   - name: "debug"
+     port: 5555
+     targetPort: 5555
+{{- if and (not .Values.global.clusterMode.enabled) (.Values.global.exposeNodePorts.enabled) }}
+     nodePort: 30555
+{{- end }}
+{{- if not .Values.global.exposeNodePorts.enabled }}
+     nodePort: null
+{{- end }}
+{{- if .Values.global.exposeNodePorts.enabled }}
+  type: NodePort
+{{- else}}
+  type: ClusterIP
+{{- end}}

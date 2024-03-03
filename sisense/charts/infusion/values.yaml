@@ -1,0 +1,85 @@
+# Default values
+
+replicaCount: 0
+
+image:
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+port: 16002
+targetPort: 16002
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  seLinuxOptions:
+    level: "s0:c123,c456"
+# If the volume has a lot of files then setting volume ownership could be slow, see https://github.com/kubernetes/kubernetes/issues/69699
+  # fsGroup: 1000
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 300Mi
+  requests:
+    cpu: 10m
+    memory: 20Mi
+
+## Pod topology spread constraints
+## https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+## The value is evaluated as a template
+topologySpreadConstraints: []
+
+nodeSelector: {}
+
+tolerations: []
+
+podAnnotations: {}
+
+# Referring to existing secrets and configMaps
+secrets: []
+configMaps: []
+
+affinity: {}
+
+## StrategyType
+## Can be set to RollingUpdate or Recreate
+updateStrategy: {}
+
+### infusion values
+infusion:
+  name: tcp-1
+  port: 16002
+  targetPort: 16002
+  rpcPort: 8457
+  rpcTargetPort: 8457
+  databaseName: "infusion"
+
+### MSTeams values
+infusionTeams:
+  enabled: true
+  name: tcp-2
+  port: 16003
+  targetPort: 16003
+  rpcPort: 8458
+  rpcTargetPort: 8458
+  teamsVersion: vTeams
+  databaseName: "infusion-teams"
+
+### Slack values
+infusionSlack:
+  enabled: true
+  name: tcp-3
+  port: 16004
+  targetPort: 16004
+  rpcPort: 8459
+  rpcTargetPort: 8459
+  slackVersion: vSlack
+  databaseName: "infusion-slack"

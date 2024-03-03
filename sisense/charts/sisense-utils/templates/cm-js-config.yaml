@@ -1,0 +1,7 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: js-configuration
+  labels: {{- include "sisense-utils.labels" . | nindent 4 }}
+data:
+

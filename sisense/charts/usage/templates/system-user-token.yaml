@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: system-user-token
+  namespace: {{ .Release.Namespace }}
+stringData:
+  token: ""

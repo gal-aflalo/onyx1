@@ -1,0 +1,30 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: add-completion
+data:
+  add-completion.sh: |-
+    #!/bin/bash
+    echo -e "Loading kubectl completion ..."
+    source <(kubectl completion bash) 2>/dev/null
+
+    echo -e "Loading helm completion ..."
+    source <(helm completion bash) 2>/dev/null
+
+    alias k=kubectl
+    complete -F __start_kubectl k
+    kubectl config set-context --current --namespace={{ .Release.Namespace }}
+
+    echo -e "Now you can use 'k' alias for querying Sisense Kubernetes resources (Example: k get nodes) ..."
+
+    kubectl cp -n {{ .Release.Namespace }} $(kubectl get pods -n {{ .Release.Namespace }} -l app=management --no-headers -o custom-columns=":metadata.name" ):/etc/sisense.sh ~/sisense.sh >/dev/null 2>&1
+    source ~/sisense.sh 2>/dev/null
+
+    SYSTEM_ALIAS=$(kubectl get -n {{ .Release.Namespace }} cm global-configuration -ojsonpath='{.data.SYSTEM_ALIAS}')
+
+    if [[ "" == ${SYSTEM_ALIAS} ]] ; then
+            SYSTEM_ALIAS=$(kubectl exec -n {{ .Release.Namespace }} -it $(kubectl get pods -n {{ .Release.Namespace }} -l app=api-gateway --no-headers -o custom-columns=":metadata.name" | tail -n1) -- printenv SYSTEM_ALIAS)
+    fi
+
+    echo -e "Using Sisense address $SYSTEM_ALIAS to login to Sisense CLI ..."
+    login_sisense $SYSTEM_ALIAS $@

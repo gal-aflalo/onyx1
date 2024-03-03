@@ -1,0 +1,129 @@
+apiVersion: v2
+appVersion: "onyx.441"
+description: Sisense chart
+name: sisense
+maintainers:
+  - email: devops@sisense.com
+    name: DevOps Team
+version: 0.0.441-onyx
+dependencies:
+  - name: keda
+    condition: keda.enabled
+  - name: mongodb
+    condition: mongodb.enabled
+  - condition: ai-integration.enabled
+    name: ai-integration
+
+  - condition: ai-services.enabled
+    name: ai-services
+
+  - condition: analyticalengine.enabled
+    name: analyticalengine
+
+  - condition: api-gateway.enabled
+    name: api-gateway
+
+  - condition: build.enabled
+    name: build
+
+  - condition: cloud360.enabled
+    name: cloud360
+
+  - condition: compute-service.enabled
+    name: compute-service
+
+  - condition: configuration.enabled
+    name: configuration
+
+  - condition: connectors.enabled
+    name: connectors
+
+  - condition: customcode.enabled
+    name: customcode
+
+  - condition: dgraph.enabled
+    name: dgraph
+
+  - condition: dgraph-ha.enabled
+    name: dgraph-ha
+
+  - condition: exporter-xlsx.enabled
+    name: exporter-xlsx
+
+  - condition: exporting.enabled
+    name: exporting
+
+  - condition: external-plugins.enabled
+    name: external-plugins
+
+  - condition: filebrowser.enabled
+    name: filebrowser
+
+  - condition: galaxy.enabled
+    name: galaxy
+
+  - condition: grafana.enabled
+    name: grafana
+
+  - condition: identity.enabled
+    name: identity
+
+  - condition: infusion.enabled
+    name: infusion
+
+  - condition: intelligence.enabled
+    name: intelligence
+
+  - condition: jobs.enabled
+    name: jobs
+
+  - condition: knowledgegraph.enabled
+    name: knowledgegraph
+
+  - condition: management.enabled
+    name: management
+
+  - condition: migration.enabled
+    name: migration
+
+  - condition: model-graphql.enabled
+    name: model-graphql
+
+  - condition: model-logspersistence.enabled
+    name: model-logspersistence
+
+  - condition: nlq-compile.enabled
+    name: nlq-compile
+
+  - condition: nlq-duckling.enabled
+    name: nlq-duckling
+
+  - condition: nlq-rt.enabled
+    name: nlq-rt
+
+  - condition: oxygen.enabled
+    name: oxygen
+
+  - condition: pivot2-be.enabled
+    name: pivot2-be
+
+  - condition: plugins.enabled
+    name: plugins
+
+  - condition: query.enabled
+    name: query
+
+  - condition: quest.enabled
+    name: quest
+
+  - condition: reporting.enabled
+    name: reporting
+
+  - condition: translation.enabled
+    name: translation
+
+  - condition: usage.enabled
+    name: usage
+
+  - condition: warehouse.enabled
+    name: warehouse

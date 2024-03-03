@@ -1,0 +1,27 @@
+# used only for development. Should be migrated on update
+{{- if .Values.global.exposeNodePorts.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "common.names.fullname" . }}-external
+  namespace: {{ include "common.names.namespace" . | quote }}
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+    {{- if .Values.service.labels }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.service.labels "context" $) | nindent 4 }}
+    {{- end }}
+spec:
+  type: NodePort
+  ports:
+    - name: amqp
+      protocol: TCP
+      port: {{ .Values.service.ports.amqp }}
+      nodePort: {{ .Values.service.nodePorts.amqp }}
+    - name: {{ .Values.service.portNames.manager }}
+      protocol: TCP
+      port: {{ .Values.service.ports.manager }}
+      nodePort: {{ .Values.service.nodePorts.manager }}
+  selector: {{ include "common.labels.matchLabels" . | nindent 4 }}
+{{- end }}

@@ -1,0 +1,173 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "translation.name" . }}
+  labels: {{- include "translation.labels" . | nindent 4 }}
+spec:
+  replicas: {{ include "translation.replicas" . }}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "translation.name" . }}
+  template:
+    metadata:
+      labels: {{- include "translation.labels" . | nindent 8 }}
+          {{- if .Values.global.exposeNodePorts.enabled }}
+        network_policy: bypass
+        {{- end }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "translation.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - {{ include "translation.name" . }}
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        - name: NAMESPACE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: NAMESPACE_NAME
+        - name: EXTERNAL_ADDRESS
+          value: "translation.$(NAMESPACE_NAME)"
+        - name: RABBITMQ_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: RABBITMQ_CONN_STRING
+        - name: ZOOKEEPER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: ZOOKEEPER_CONN_STRING
+        - name: SISENSE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: SISENSE_VERSION
+        - name: STORAGE_SERVICE_URL
+          value: "query:8082"
+        - name: TZ
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: TZ
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        image: "{{ .Values.global.imageRegistry}}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        name: {{ template "translation.name" . }}
+        ports:
+        - containerPort: 8070
+        resources:
+          limits: 
+            cpu: {{ include "translation.limits.cpu" . }}
+            memory: {{ include "translation.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      restartPolicy: Always
+      initContainers:
+      - name: init-configuration
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv configuration.{{ .Release.Namespace }} 3030 -w1; do echo waiting for configuration; sleep 2; done;']
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "translation.name" . }}
+  labels: {{- include "translation.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ template "translation.name" . }}
+  ports:
+  - name: app
+    port: 8070
+    targetPort: 8070
+{{- if and (not .Values.global.clusterMode.enabled) (.Values.global.exposeNodePorts.enabled) }}
+    nodePort: 30870
+{{- end }}
+{{- if not .Values.global.exposeNodePorts.enabled }}
+    nodePort: null
+{{- end }}
+  - name: debug
+    port: 22
+    targetPort: 22
+{{- if and (not .Values.global.clusterMode.enabled) (.Values.global.exposeNodePorts.enabled) }}
+    nodePort: 30022
+{{- end }}
+{{- if not .Values.global.exposeNodePorts.enabled }}
+    nodePort: null
+{{- end }}
+
+{{- if .Values.global.exposeNodePorts.enabled }}
+  type: NodePort
+{{- else}}
+  type: ClusterIP
+{{- end}}

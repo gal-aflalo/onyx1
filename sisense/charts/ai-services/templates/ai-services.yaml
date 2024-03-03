@@ -1,0 +1,192 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "ai-services.name" . }}
+  labels: {{- include "ai-services.labels" . | nindent 4 }}
+    {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+    nlq: "true"
+    {{- end }}
+spec:
+  replicas: {{ include "ai-services.replicas" . }}
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  selector:
+    matchLabels:
+      app: {{ template "ai-services.name" . }}
+      {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+      nlq: "true"
+      {{- end }}
+  template:
+    metadata:
+      labels: {{- include "ai-services.labels" . | nindent 8 }}
+        {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+        nlq: "true"
+        {{- end }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "ai-services.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - {{ include "ai-services.name" . }}
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{.Release.Name}}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - env:
+        - name: PYTHONHASHSEED
+          value: "0"
+        - name: AI_SERVICES_SERVICE_PORT
+          value: "15105"
+        - name: DEPLOYED_TIME
+          valueFrom:
+            configMapKeyRef:
+              name: deployed-time
+              key: deployed_time
+        - name: RABBITMQ_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: RABBITMQ_CONN_STRING
+        - name: ZOOKEEPER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: ZOOKEEPER_CONN_STRING
+        - name: TZ
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: TZ
+        {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+        - name: DGRAPH_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: DGRAPH_URL
+        {{- end }} 
+        - name: SERVICE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: SISENSE_VERSION
+    {{- if .Values.global.securityContext }}
+        - name: UID
+          value: {{ .Values.global.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.global.securityContext.runAsGroup | quote }}      
+    {{- else if .Values.securityContext.runAsUser }}
+        - name: UID
+          value: {{ .Values.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.securityContext.runAsGroup  | quote }}          
+    {{- end }}  
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        name: {{ template "ai-services.name" . }}
+        resources:
+          limits: 
+            cpu: {{ include "ai-services.limits.cpu" . }}
+            memory: {{ include "ai-services.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        ports:
+        - containerPort: {{ .Values.containerPort}}
+        volumeMounts:
+        - name: storage
+          mountPath: /opt/sisense/storage
+      volumes:
+{{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+{{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+{{- end }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      restartPolicy: Always
+      initContainers:
+      - name: init-configuration
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv configuration.{{ .Release.Namespace }} 3030 -w1; do echo waiting for configuration; sleep 2; done;']
+      {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+      - name: init-dgraph
+        image: {{ .Values.global.imageRegistry }}/utilsbox:stable
+        env:
+          - name: DGRAPH_URL
+            valueFrom:
+              configMapKeyRef:
+                name: global-configuration
+                key: DGRAPH_URL
+        command: ['sh', '-c', 'until nc -zv ${DGRAPH_URL} 9080 -w1; do echo waiting for dgraph; sleep 2; done;']
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "ai-services.name" . }}
+  labels: {{- include "ai-services.labels" . | nindent 4 }}
+spec:
+ selector:
+  app: {{ template "ai-services.name" . }}
+ ports:
+  - name: tcp
+    port: {{ .Values.containerPort}}
+    targetPort: {{ .Values.servicePort}}
+ type: ClusterIP

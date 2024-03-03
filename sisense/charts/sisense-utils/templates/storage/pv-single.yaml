@@ -1,0 +1,57 @@
+{{ if not .Values.global.clusterMode.enabled }}
+---
+# Zookeeper
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: zookeeper-{{ .Release.Namespace }}-volume
+  labels:
+    app: zookeeper
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  storageClassName: manual
+  persistentVolumeReclaimPolicy: Retain
+  capacity:
+    storage: "{{ .Values.singleZookeeprDiskSize }}Gi"
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/opt/{{ .Release.Namespace }}/zookeeper"
+---
+# MongoDb
+{{ if (.Values.global.mongodb).enabled | default true }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongodb-{{ .Release.Namespace }}-volume
+  labels:
+    app.kubernetes.io/name: mongodb
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  storageClassName: manual
+  persistentVolumeReclaimPolicy: Retain
+  capacity:
+    storage: "{{ .Values.singleMongodbDiskSize }}Gi"
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/opt/sisense/mongodb"
+{{ end }}
+---  
+# Dgraph
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dgraph-{{ .Release.Namespace }}-volume
+  labels:
+    dgraph: dgraph
+spec:
+  storageClassName: manual
+  persistentVolumeReclaimPolicy: Retain
+  capacity:
+    storage: "{{ .Values.singleDgraphDiskSize }}Gi"
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/opt/sisense/dgraph-io"
+{{ end }}

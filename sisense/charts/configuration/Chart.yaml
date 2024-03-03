@@ -1,0 +1,10 @@
+apiVersion: v1
+description: Sisense Configuration Service
+home: https://www.gluster.org
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: configuration
+sources:
+- https://github.com/gluster/gluster-kubernetes
+version: 1.0.0

@@ -1,0 +1,29 @@
+# Default values for migrations job
+image:
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  seLinuxOptions:
+    level: "s0:c123,c456"
+# If the volume has a lot of files then setting volume ownership could be slow, see https://github.com/kubernetes/kubernetes/issues/69699
+  # fsGroup: 1000
+
+externalServiceAccount:
+  annotations: {}
+
+podAnnotations: {}
+
+# Referring to existing secrets and configMaps
+secrets: []
+configMaps: []

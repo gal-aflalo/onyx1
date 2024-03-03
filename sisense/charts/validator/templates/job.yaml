@@ -1,0 +1,122 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "validator.name" . }}-{{ randAlphaNum 5 | lower }}
+  labels: {{- include "validator.labels" . | nindent 4 }}
+spec:
+  parallelism: 1
+  completions: 1
+  backoffLimit: 0
+  template:
+    metadata:
+      name: {{ template "validator.name" . }}
+      labels: {{- include "validator.labels" . | nindent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      serviceAccountName: {{ template "validator.name" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      restartPolicy: Never
+      containers:
+        - name: validator
+          image: "{{ .Values.global.imageRegistry }}/{{ .Values.image.name }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          workingDir: /app
+          command:
+          - "/bin/bash"
+          - "-c"
+          - |
+              set -eo pipefail
+              bash run.sh
+              # sleep 6h
+          env:
+            - name: NAMESPACE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OLD_SYSTEM_ALIAS
+              value: {{ include "validator.old.system.alias" . }}
+            - name: IS_SSL
+              value: {{ default "false" (.Values.global.ssl).enabled | quote }}
+            - name: APPLICATION_DNS_NAME
+              value: {{ default "" .Values.global.applicationDnsName | quote }}
+            - name: CLUSTER_VISIBILITY
+              value: {{ ne .Values.global.clusterVisibility false | quote }}
+            - name: CLOUD_LOAD_BALANCER
+              value: {{ default "false" (.Values.global.cloudLoadBalancer).enabled | quote }}
+            - name: GATEWAY_PORT
+              value: {{ default "30845" .Values.global.gatewayPort | quote }}
+            - name: EXPOSE_NODEPORTS
+              value: {{ default "false" (.Values.global.exposeNodePorts).enabled | quote }}
+            - name: LOCAL_MONGODB
+              value: {{ default "false" (.Values.global.mongodb).enabled | quote }}
+            - name: ALB_CONTROLLER
+              value: {{ default "false" (.Values.global.albController).enabled | quote }}
+          {{- if .Values.global.securityContext }}
+          {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+            - name: HOME
+              value: "/tmp"
+          {{- end }}
+          {{- else if .Values.securityContext.runAsUser }}
+          {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+            - name: HOME
+              value: "/tmp"
+          {{- end }}
+          {{- end }}
+          envFrom:
+          {{- if .Values.configMaps }}
+          - configMapRef:
+          {{- range .Values.configMaps }}
+              name: {{ . }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.secrets }}
+          - secretRef:
+          {{- range .Values.secrets }}
+              name: {{ . }}
+          {{- end }}
+          {{- end }}
+          - configMapRef:
+              name: global-configuration
+          volumeMounts:
+          - mountPath: /app
+            name: scripts
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      volumes:
+      - name: scripts
+        configMap:
+          name: {{ template "validator.name" . }}

@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense galaxy
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: galaxy
+version: 1.0.0

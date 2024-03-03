@@ -1,0 +1,276 @@
+## @section Global parameters
+##
+global:
+  ## @param global.external_kube_apiserver_address External Kubernetes API server address
+  external_kube_apiserver_address: ""
+  ## @param applicationDnsName Application DNS name
+  applicationDnsName: ""
+  ## @param global.clusterMode.enabled Enable or disable cluster mode
+  ## Enable if not single
+  clusterMode:
+    enabled: false
+  ## @param global.imageRegistry Global Docker image registry
+  imageRegistry: quay.io/sisense
+  ## @param global.imagePullSecrets Global Docker registry secret names as an array
+  ## E.g.
+  ## imagePullSecrets:
+  ##   - myRegistryKeySecretName
+  ##
+  imagePullSecrets: []
+  ## @param gatewayPort
+  ## Gateway port of api-gateway service - endpoint of Sisense in non-secured mode
+  gatewayPort: 30845
+  ## @param global.ssl.enabled Enable or disable SSL
+  ## Activate secured Sisense in HTTPS
+  ssl:
+    enabled: false
+  ## @param global.exposeNodePorts.enabled Enable or disable exposing node ports
+  exposeNodePorts:
+    enabled: false
+  ## @param global.kubeNetworkPlugin Kubernetes network plugin (e.g., calico, flannel)
+  kubeNetworkPlugin: "calico"
+   ## @param global.isKubernetesCloud Set to true if running on a Kubernetes cloud platform
+  isKubernetesCloud: false
+  ## @param global.kubernetesCloudProvider Cloud provider for Kubernetes (if applicable - e.g., aws, gke, azure)
+  kubernetesCloudProvider: ""
+  ## @param gloabl.highAvailability Enable or disable high availability
+  ## Load sisense service in active/active redundancy
+  highAvailability: true
+  ## @param global.clusterVisibility Enable or disable cluster visibility
+  ## Sisense will use Kubernetes ClusterRole in order to manage the tenant
+  clusterVisibility: true
+  ## @param global.vpnMode Enable or disable VPN mode
+  ## VPM Mode / Annotate EC pods for VPN awareness
+  vpnMode: false
+  ## @param global.cloudLoadBalancer Enable or disable cloud load balancer (internet facing load balancer) 
+  cloudLoadBalancer:
+    enabled: false
+    ## @param global.cloudLoadBalancer.isInternal Set to true for an internal cloud load balancer (internal load balancer)
+    isInternal: false
+  ## @param global.storageType Storage type (e.g., rook-ceph, nfs, azurefile, fsx, efs)
+  ## Leave empty to use ReadWriteMany, ReadWriteOnce StorageClass
+  storageType: ""
+  ## @param global.storageClass Storage class for persistent volumes
+  ## manual, rwo_sc_name, gp2, ebs-sc, standard, default, aws-efs, nfs-client, rook-ceph-block, nfs-server
+  storageClass: manual
+  ## @param global.serviceAccountAnnotations Additional annotations for the service account
+  serviceAccountAnnotations: {}
+  ## @param global.enableWidgetDeltas Enable delta approach for shared dashboards/widgets
+  enableWidgetDeltas: false
+  ## @param global.securityContext Security context settings for Sisense services
+  securityContext:
+    fsGroup: 1000
+    runAsGroup: 1000
+    runAsUser: 1000
+    seLinuxOptions:
+      level: s0:c123,c456
+  ## @param global.isOpenshift Set to true if running on OpenShift
+  isOpenshift: false
+  ## @param global.offlineInstaller  Set to true if running on offline environment
+  offlineInstaller: false
+  ## @param global.monitoring Internal and external monitoring settings
+  monitoring:
+    ## @param global.monitoring.internal Set to true to enable Grafana and Prometheus
+    internal: false
+    ## @param global.monitoring.external Set to true to enable Fluentd With Logz.io Dashboards
+    external: false
+  ## @param deploymentSize Deployment size is used to determine the maximum pod limits allocated for application (e.g., "small", "large")
+  deploymentSize: "small"
+  ## @param notifyOnUpgrade Set to true to show maintanace page during upgrade process
+  notifyOnUpgrade: true
+  ## @param global.mongodb.enabled Enable to install MonogoDB chart
+  mongodb:
+    enabled: false
+  ## @param global.keda.enabled Enable to install KEDA (Kubernetes Event-driven Autoscaler) chart and ScaledObjects
+  keda:
+    enabled: false
+
+## @section KEDA parameters
+##
+keda:
+  ## @param keda.enabled Enable or disable KEDA chart installation
+  enabled: false
+  ## @param podSecurityContext Pod security context for KEDA
+  podSecurityContext:
+    operator:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    metricServer:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    webhooks:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+  ## @param image Docker image settings for KEDA
+  image:
+    keda:
+      repository: quay.io/sisense/keda
+    metricsApiServer:
+      repository: quay.io/sisense/keda-metrics-apiserver
+    webhooks:
+      repository: quay.io/sisense/keda-admission-webhooks
+      
+## @section MongoDB parameters
+##
+mongodb:
+  ## @param mongodb.enabled Enable or disable MongoDB
+  enabled: true
+  podSecurityContext:
+    fsGroup: 1000
+  containerSecurityContext:
+    runAsUser: 1000
+  ## @param initContainers Initialization containers for MongoDB (uncomment for single installation with user 1000)
+  #initContainers:
+  #  - name: init-remove-backup
+  #    image: "quay.io/sisense/utilsbox:stable"
+  #    command: ['sh', '-c', 'find /bitnami/mongodb/ -maxdepth 1 -type f -delete; rm -rf /bitnami/mongodb/journal/ /bitnami/mongodb/diagnostic.data/ ']
+  #    volumeMounts:
+  #      - name: datadir
+  #        mountPath: /bitnami/mongodb
+  ## @param architecture MongoDB cluster architecture (uncomment for cluster installation with high availability)
+  # architecture: replicaset
+  ## @param pdb MongoDB PodDisruptionBudget settings (uncomment on cluster installation with high availability)
+  # pdb:
+  #   create: true
+  ## @param metrics Enable or disable MongoDB metrics
+  metrics:
+    enabled: false
+     ## @param metrics.serviceMonitor.Namespace Namespace for the ServiceMonitor
+    serviceMonitor:
+      namespace: "monitoring"
+
+## @section Zookeeper parameters
+##
+zookeeper:
+  ## @param podSecurityContext Pod security context for Zookeeper
+  podSecurityContext:
+    fsGroup: 1000
+  ## @param containerSecurityContext Container security context for Zookeeper
+  containerSecurityContext:
+    runAsUser: 1000
+  ## @param volumePermissions Volume permissions settings for Zookeeper (uncomment if user is not 1000)
+  # volumePermissions:
+  #   enabled: false
+  ## @param configuration Zookeeper configuration (uncomment last 2 rows on cluster installation)
+  configuration: |-
+    tickTime=2000
+    initLimit=10
+    syncLimit=5
+    dataDir=/bitnami/zookeeper/data
+    clientPort=2181
+    maxClientCnxns=1000
+    autopurge.snapRetainCount=3
+    autopurge.purgeInterval=1
+    snapshot.trust.empty=true
+    metricsProvider.className=org.apache.zookeeper.metrics.prometheus.PrometheusMetricsProvider
+    metricsProvider.httpPort=9141
+    metricsProvider.exportJvmInfo=true
+    maxCnxns=0
+    reconfigEnabled=false
+    quorumListenOnAllIPs=false
+    4lw.commands.whitelist=srvr, mntr, ruok
+    maxSessionTimeout=40000
+    server.1=sisense-zookeeper-0.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
+  # server.2=sisense-zookeeper-1.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
+  # server.3=sisense-zookeeper-2.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
+  ## @param persistence Persistence settings for Zookeeper (uncomment for single installation)
+  # persistence:
+  #  existingClaim: data-zookeeper-0
+  ## @param replicaCount Number of Zookeeper replicas (uncomment for cluster installation with high availability)
+  # replicaCount: 3
+  ## @param pdb Zookeeper PodDisruptionBudget settings (uncomment for cluster installation with high availability)
+  # pdb:
+  #   maxUnavailable: 2
+  ## @param metrics Enable or disable Zookeeper metrics
+  metrics:
+   enabled: false
+
+## @section RabbitMQ parameters
+##
+rabbitmq:
+  ## @param podSecurityContext Pod security context for RabbitMQ
+  podSecurityContext:  
+    fsGroup: 1000
+  ## @param containerSecurityContext Container security context for RabbitMQ
+  containerSecurityContext:
+    runAsUser: 1000
+  ## @param replicaCount Number of RabbitMQ replicas (uncomment for cluster installation with high availability)
+  # replicaCount: 3
+  ## @param clustering Enable for cluster installation with high availability
+  clustering:
+    enabled: false
+  ## @param metrics Enable or disable RabbitMQ metrics
+  metrics:
+    enabled: false
+
+## @section Grafana parameters
+##
+grafana:
+  ## @param securityContext Security context settings for Grafana
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+  ## @param adminUser Admin user for Grafana (should be "user-{{namespace_name}}")
+  adminUser: "user-sisense"
+  ## @param adminPassword Admin password for Grafana (should be "passwd-{{namespace_name}}")
+  adminPassword: "passwd-sisense"
+  ## @param persistence Persistence settings for Grafana
+  persistence:
+  ## @param storageClassName on cluster installation (e.g., rwo_sc_name, manual, standard, default, gp2, ebs-sc, aws-efs, nfs-client)
+  # storageClassName: 
+  ## @param selectorLabels Selector labels for Grafana (uncomment for single or rook-ceph installation)
+  # selectorLabels:
+    ## should be "grafana-{{namespace_name}}"
+    # app: "grafana-sisense"
+  ## @param initChownData Enable if runAsUser is not set to 1000
+  initChownData:
+    enabled: false
+  ## @param plugins (uncomment on offline installation)
+  # plugins: []
+  ## @param datasources Datasource settings for Grafana
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        ## should be http://{{ prometheus_service }}.{{ prometheus_service_ns }}:9090
+        url: http://sisense-prom-operator-kube-prometheus.monitoring:9090
+        access: proxy
+        isDefault: true
+  ## @param sidecar Sidecar settings for Grafana
+  sidecar:
+    dashboards:
+      ## should be {{ namespace_name }}
+      searchNamespace: sisense
+    datasources:
+      ## should be {{ namespace_name }}
+      searchNamespace: sisense
+      createPrometheusReplicasDatasources: false
+  grafana.ini:
+    dashboards:
+      default_home_dashboard_path: /tmp/dashboards/nodes.json
+  ## @param rbac RBAC settings for Grafana (uncomment if not clusterVisibility)
+  #rbac:
+  #  namespaced: true
+  ## @param affinity Affinity settings for Grafana (uncomment on cluster installation)
+  #affinity:
+  #  nodeAffinity:
+  #    requiredDuringSchedulingIgnoredDuringExecution:
+  #      nodeSelectorTerms:
+  #      - matchExpressions:
+  #        - key: "node-sisense-Application"
+  #          operator: In
+  #          values:
+  #          - "true"
+
+storage:
+  git:
+    enabled: true
+
+cloud360:
+  allowCloud360: false

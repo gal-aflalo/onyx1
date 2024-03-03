@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "compute.name" . }}
+  namespace: {{ template "compute.namespace" . }}
+  labels: {{- include "compute.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "compute.name" . }}
+  replicas: {{ .Values.replicaCount }}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels: {{- include "compute.labels" . | nindent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "compute.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        # TODO: uncomment this and see if it's needed. This is currently throwing errors
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        # - configMapRef:
+        #     name: global-configuration
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        name: {{ template "compute.name" . }}
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        resources:
+          limits: 
+            cpu: {{ include "compute.limits.cpu" . }}
+            memory: {{ include "compute.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        # TODO: add liveness and readiness probes to code
+        # livenessProbe:
+        #   httpGet:
+        #     path: /liveness
+        #     port: 8882
+        #   initialDelaySeconds: 60
+        #   timeoutSeconds: 10
+        #   periodSeconds: 20
+        #   successThreshold: 1
+        #   failureThreshold: 3
+        # readinessProbe:
+        #   httpGet:
+        #     path: /readiness
+        #     port: 8882
+        #   initialDelaySeconds: 10
+        #   timeoutSeconds: 5
+        #   periodSeconds: 10
+        #   successThreshold: 1
+        #   failureThreshold: 3
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      restartPolicy: Always
+{{- end }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "compute.name" . }}
+  labels: {{- include "compute.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - name: tcp
+    protocol: TCP
+    port: 8882
+    targetPort: 8882
+  selector:
+    app: {{ template "compute.name" . }}

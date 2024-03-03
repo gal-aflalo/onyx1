@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "quest.name" . }}
+  labels: {{- include "quest.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "quest.name" . }}
+  replicas: {{ include "quest.replicas" . }}
+  #Can be created over the desired replicas number
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels: {{- include "quest.labels" . | nindent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "quest.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        - name: RABBITMQ_CONN_STRING
+          value: "amqp://{{ .Release.Name }}-rabbitmq.{{ .Release.Namespace }}:5672"
+        - name: QUEST_PORT
+          value: "9094"
+        - name: SELS_URL
+          value: "https://auth.cloud.sisense.com"
+        - name: DEC_ID
+          value: "ai"
+        - name: TIMESERIES_URL
+          value: "https://api.usw.cloud.sisense.com/air/timeseries/v1/"
+        - name: QUEST_CLOUD_URL
+          value: "https://api.usw.cloud.sisense.com/air/quest/v1/"
+        - name: CONTAINER_MEMORY_LIMIT
+          valueFrom:
+            resourceFieldRef:
+              containerName: {{ template "quest.name" . }}
+              resource: limits.memory
+              divisor: '1Mi'
+        - name: NODE_OPTIONS
+          value: "$(DEFAULT_NODE_OPTIONS) --max-old-space-size=$(CONTAINER_MEMORY_LIMIT)"
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        - configMapRef:
+            name: global-configuration
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        name: {{ template "quest.name" . }}
+        resources:
+          limits: 
+            cpu: {{ include "quest.limits.cpu" . }}
+            memory: {{ include "quest.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      restartPolicy: Always
+      initContainers:
+      - name: init-configuration
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv configuration.{{ .Release.Namespace }} 3030 -w1; do echo waiting for configuration; sleep 2; done;']
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "quest.name" . }}
+  labels: {{- include "quest.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ template "quest.name" . }}
+  ports:
+    - name: tcp
+      protocol: TCP
+      port: 16002
+      targetPort: 16002

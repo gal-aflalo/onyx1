@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense Query
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: query
+version: 1.0.0

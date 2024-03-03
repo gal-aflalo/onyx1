@@ -1,0 +1,176 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "plugins.name" . }}
+  labels: {{- include "plugins.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "plugins.name" . }}
+  replicas: {{ .Values.replicaCount }}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- else if eq .Values.global.imageRegistry "docker.artifactory.sisense.com"}}
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  {{- end }}
+  template:
+    metadata:
+      labels: {{- include "plugins.labels" . | nindent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "plugins.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        - name: PLUGINS_PORT
+          value: "16002"
+        - name: 'CONTAINER_MEMORY_LIMIT'
+          valueFrom:
+            resourceFieldRef:
+              containerName: {{ template "plugins.name" . }}
+              resource: limits.memory
+              divisor: '1Mi'
+        - name: 'NODE_OPTIONS'
+          value: "$(DEFAULT_NODE_OPTIONS) --max-old-space-size=$(CONTAINER_MEMORY_LIMIT)"
+        - name: DEPLOYED_TIME
+          valueFrom:
+            configMapKeyRef:
+              name: deployed-time
+              key: deployed_time
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        - configMapRef:
+            name: global-configuration
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+{{ include "plugins.container.command" . | indent 8 }}
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        name: {{ template "plugins.name" . }}
+        ports:
+        - containerPort: 16002
+        - containerPort: 8457
+        livenessProbe:
+          httpGet:
+            path: /liveness
+            port: 16002
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 20
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 16002
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        resources:
+          limits: 
+            cpu: {{ include "plugins.limits.cpu" . }}
+            memory: {{ include "plugins.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        volumeMounts:
+        - mountPath: /opt/sisense/storage
+          name: storage
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      volumes:
+    {{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: "storage"
+    {{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+    {{- end }}
+      restartPolicy: Always
+      initContainers:
+      - name: init-configuration
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv configuration.{{ .Release.Namespace }} 3030 -w1; do echo waiting for configuration; sleep 2; done;']
+      - name: check-activation
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', "until [ $(wget --spider -S  oxygen.{{ .Release.Namespace }}:31112/get 2>&1 | grep 'HTTP/' | awk '{print $2}') -eq 200 ]; do echo waiting for activation; sleep 2;done;"]
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "plugins.name" . }}
+  labels: {{- include "plugins.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ template "plugins.name" . }}
+  ports:
+  - name: tcp
+    protocol: TCP
+    port: 16002
+    targetPort: 16002
+  - name: internal-http-rpc
+    port: 8457
+    protocol: TCP
+    targetPort: 8457

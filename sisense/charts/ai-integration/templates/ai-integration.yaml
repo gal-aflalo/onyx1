@@ -1,0 +1,176 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "ai-integration.name" . }}
+  labels: {{- include "ai-integration.labels" . | nindent 4 }}
+spec:
+  replicas: {{ include "ai-integration.replicas" . }}
+  #Can be created over the desired replicas number
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "ai-integration.name" . }}
+  template:
+    metadata:
+      labels: {{- include "ai-integration.labels" . | nindent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "ai-integration.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - {{ include "ai-integration.name" . }}
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}   
+        - name: UID
+          value: {{ .Values.global.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.global.securityContext.runAsGroup  | quote }}        
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}         
+        - name: UID
+          value: {{ .Values.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.securityContext.runAsGroup  | quote }}     
+    {{- end }}    
+        - name: AI_INTEGRATION_PORT
+          value: "9092"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+        - name: NLQ_STORAGE_DIR
+          value: "/opt/sisense/storage/nlq/"
+        {{- end }}  
+        - name: SELS_URL
+          value: "{{ .Values.ai_sels_url }}"
+        - name: DEC_ID
+          value: "{{ .Values.ai_dec_id }}"
+        - name: TIMESERIES_URL
+          value: "{{ .Values.ai_timeseries_url }}"
+        - name: DRIVERS_URL
+          value: "{{ .Values.ai_drivers_url }}"
+        - name: 'NODE_OPTIONS'
+          value: "$(DEFAULT_NODE_OPTIONS)"
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        - configMapRef:
+            name: global-configuration
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        name: {{ template "ai-integration.name" . }}
+        resources:
+          limits: 
+            cpu: {{ include "ai-integration.limits.cpu" . }}
+            memory: {{ include "ai-integration.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        ports:
+        - containerPort: 9092
+        - containerPort: 8457
+        volumeMounts:
+        - name: storage
+          mountPath: /opt/sisense/storage
+      volumes:
+{{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+{{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+{{- end }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      restartPolicy: Always
+      initContainers:
+      - name: init-configuration
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv configuration.{{ .Release.Namespace }} 3030 -w1; do echo waiting for configuration; sleep 2; done;']
+      - name: init-build
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv build.{{ .Release.Namespace }} 8082 -w1; do echo waiting for build; sleep 2; done;']
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "ai-integration.name" . }}
+  labels: {{- include "ai-integration.labels" . | nindent 4 }}
+spec:
+ selector:
+  app: {{ template "ai-integration.name" . }}
+ ports:
+  - name: tcp
+    protocol: TCP
+    port: 16002
+    targetPort: 16002
+  - name: "{{ template "ai-integration.name" . }}"
+    port: 9092
+    targetPort: 9092
+  - name: rpc
+    protocol: TCP
+    port: 8457
+    targetPort: 8457
+ type: ClusterIP

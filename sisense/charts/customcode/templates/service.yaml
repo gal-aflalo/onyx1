@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels: {{- include "customcode.labels" . | nindent 4 }}
+  name: {{ template "customcode.name" . }}
+spec:
+  selector:
+    app: {{ template "customcode.name" . }}
+  ports:
+  - name: tcp
+    protocol: TCP
+    port: 8888
+    targetPort: 8888
+  type: ClusterIP

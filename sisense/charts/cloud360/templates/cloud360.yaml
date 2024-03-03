@@ -1,0 +1,167 @@
+{{- if .Values.allowCloud360 | default false}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "cloud360.name" . }}
+  labels: {{- include "cloud360.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "cloud360.name" . }}
+  replicas: 1
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels: {{- include "cloud360.labels" . | nindent 8 }}
+        {{- if .Values.global.exposeNodePorts.enabled }}
+        network_policy: bypass
+        {{- end }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "cloud360.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+        {{- if .Values.global.highAvailability }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - {{ include "cloud360.name" . }}
+            topologyKey: kubernetes.io/hostname
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: cloud360
+          image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+          imagePullPolicy: Always
+          resources:
+            limits: 
+            cpu: {{ include "cloud360.limits.cpu" . }}
+            memory: {{ include "cloud360.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+          ports:
+            - containerPort: 3600
+          livenessProbe:
+            httpGet:
+              path: /liveness
+              port: 3600
+            initialDelaySeconds: 60
+            timeoutSeconds: 10
+            periodSeconds: 20
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 3600
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+            - configMapRef:
+                name: global-configuration
+            - configMapRef:
+                name: apm-configuration
+          env:
+            - name: SNOWFLAKE_USERNAME_ENCRYPTED
+              valueFrom:
+                secretKeyRef:
+                  key: {{ .Values.secrets.snowflakeUsernameSecretKey | default "username" }}
+                  name: {{ .Values.secrets.snowflakeUsernameSecretName | default "cloud360-snowflake-username" }}
+                  optional: true
+            - name: SNOWFLAKE_PASSWORD_ENCRYPTED
+              valueFrom:
+                secretKeyRef:
+                  key: {{ .Values.secrets.snowflakePasswordSecretKey | default "password" }}
+                  name: {{ .Values.secrets.snowflakePasswordSecretName | default "cloud360-snowflake-password" }}
+                  optional: true
+            - name: SNOWFLAKE_WAREHOUSE_ENCRYPTED
+              valueFrom:
+                secretKeyRef:
+                  key: {{ .Values.secrets.snowflakeWarehouseSecretKey | default "warehouse" }}
+                  name: {{ .Values.secrets.snowflakeWarehouseSecretName | default "cloud360-snowflake-warehouse" }}
+                  optional: true
+            - name: SNOWFLAKE_DATABASE_ENCRYPTED
+              valueFrom:
+                secretKeyRef:
+                  key: {{ .Values.secrets.snowflakeDatabaseSecretKey | default "database" }}
+                  name: {{ .Values.secrets.snowflakeDatabaseSecretName | default "cloud360-snowflake-database" }}
+                  optional: true
+            - name: SNOWFLAKE_SCHEMA_ENCRYPTED
+              valueFrom:
+                secretKeyRef:
+                  key: {{ .Values.secrets.snowflakeSchemaSecretKey | default "schema" }}
+                  name: {{ .Values.secrets.snowflakeSchemaSecretName | default "cloud360-snowflake-schema" }}
+                  optional: true
+            - name: SNOWFLAKE_HOST_ENCRYPTED
+              valueFrom:
+                secretKeyRef:
+                  key: {{ .Values.secrets.snowflakteHostSecretKey | default "host" }}
+                  name: {{ .Values.secrets.snowflakeHostSecretName | default "cloud360-snowflake-host" }}
+                  optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "cloud360.name" . }}
+  labels: {{- include "cloud360.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ template "cloud360.name" . }}
+  type: ClusterIP
+  ports:
+  - name: tcp
+    protocol: TCP
+    port: 3600
+    targetPort:  3600
+  - name: internal-http-rpc
+    port: 8457
+    protocol: TCP
+    targetPort: 8457
+{{- end }}

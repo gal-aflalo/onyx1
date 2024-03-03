@@ -1,0 +1,9 @@
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "external-plugins.serviceAccountName" . }}
+  labels: {{- include "external-plugins.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["", "apps", "extensions"]
+    resources: ["deployments"]
+    verbs: ["patch", "get", "list"]

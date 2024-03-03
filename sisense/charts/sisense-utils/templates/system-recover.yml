@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: system-recover
+  labels: {{- include "sisense-utils.customlabels" . | nindent 4 }}
+    app: system-recover
+    app.kubernetes.io/name: system-recover
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    sisense-version: {{ include "sisense-utils.sisense.version" . }}
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: system-recover
+  template:
+    metadata:
+      labels: {{- include "sisense-utils.customlabels" . | nindent 4 }}
+        app: system-recover
+        app.kubernetes.io/name: system-recover
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      serviceAccountName: {{ include "sisense-utils.serviceAccountName" . }}
+      containers:
+      - name: system-recover
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        imagePullPolicy: Always
+        command: [ "/bin/sh", "-c", "--" ]
+        args: [ "while true; do sleep 30; done;" ]
+        volumeMounts:
+        - name: storage-0
+          mountPath: /mongodb0
+        - name: storage-1
+          mountPath: /mongodb1
+        - name: storage-2
+          mountPath: /mongodb2
+        - name: storage-3
+          mountPath: /zookeeper0
+        - name: storage-4
+          mountPath: /zookeeper1
+        - name: storage-5
+          mountPath: /zookeeper2
+        - name: storage-6
+          mountPath: /sisense
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      volumes:
+      - name: storage-0
+        persistentVolumeClaim:
+          claimName: datadir-sisense-mongodb-0
+      - name: storage-1
+        persistentVolumeClaim:
+          claimName: datadir-sisense-mongodb-1
+      - name: storage-2
+        persistentVolumeClaim:
+          claimName: datadir-sisense-mongodb-2
+      - name: storage-3
+        persistentVolumeClaim:
+          claimName: data-sisense-zookeeper-0
+      - name: storage-4
+        persistentVolumeClaim:
+          claimName: data-sisense-zookeeper-1
+      - name: storage-5
+        persistentVolumeClaim:
+          claimName: data-sisense-zookeeper-2
+      - name: storage-6
+        persistentVolumeClaim:
+          claimName: storage

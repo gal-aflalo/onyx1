@@ -1,0 +1,12 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ template "migration.name" . }}
+  labels: {{- include "migration.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ template "migration.name" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ template "migration.name" . }}

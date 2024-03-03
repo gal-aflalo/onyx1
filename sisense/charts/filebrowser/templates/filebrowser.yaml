@@ -1,0 +1,244 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "filebrowser.name" . }}
+  labels: {{- include "filebrowser.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "filebrowser.name" . }}
+  replicas: {{ .Values.replicaCount}}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- else if eq .Values.global.imageRegistry "docker.artifactory.sisense.com"}}
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  {{- end }}
+  template:
+    metadata:
+      labels: {{- include "filebrowser.labels" . | nindent 8 }}
+    spec:
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+      {{- if (not .Values.global.isOpenshift | default false) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "filebrowser.serviceAccountName" . }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}   
+        - name: UID
+          value: {{ .Values.global.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.global.securityContext.runAsGroup  | quote }}        
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}         
+        - name: UID
+          value: {{ .Values.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.securityContext.runAsGroup  | quote }}     
+    {{- end }}    
+        - name: SERVICE_VERSION
+          value: "{{ .Values.global.sisense_version }}"
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        name: {{ template "filebrowser.name" . }}
+        {{- if .Values.global.securityContext }}
+        securityContext:
+          runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+          runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+          seLinuxOptions:
+            level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+        {{- end }}
+        {{- else if .Values.securityContext }}
+        securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+        {{- end }}
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        ports:
+        - containerPort: 8989
+        resources:
+          limits: 
+            cpu: {{ include "filebrowser.limits.cpu" . }}
+            memory: {{ include "filebrowser.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        volumeMounts:
+        - name: storage
+          mountPath: /files
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      volumes:
+      - name: 3rdparty-license2
+        configMap:
+          name: 3rdparty-license2
+{{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+{{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+{{- end }}
+      restartPolicy: Always
+      initContainers:
+      - name: create-folders-tree
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        env:
+    {{- if .Values.global.securityContext }}
+        - name: UID
+          value: {{ .Values.global.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.global.securityContext.runAsGroup  | quote }}
+    {{- else }}
+        - name: UID
+          value: {{ .Values.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.securityContext.runAsGroup  | quote }}
+    {{- end }}
+        {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+        command:
+          - "/bin/sh"
+          - "-ecx"
+          - |
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/sdk;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/audit;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/usage;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/resources;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/datasets;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/nlq;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/external-plugins;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/branding;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/styles;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/emails;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/exports;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/reports;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/notebooks;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/backups;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/samples;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/plugins;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/build-plugins;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/system_backups;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/translations;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/licensing;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/connectors;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/data;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/serverSidePlugins;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/custom-certificates;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/monitoring-custom-tests;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/farms;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/tenants;
+            find /opt/sisense/storage -maxdepth 1 -type f -name "*report*.png" -print0 | xargs -0 rm -f;
+            find /opt/sisense/storage/reports -type f -mtime +7 -name "*.png" -print0 | xargs -0 rm -f;
+            chown -R $UID:$GID /opt/sisense/storage/plugins/ 2>/dev/null;
+            touch /opt/sisense/storage/custom-certificates/ca-certificates.crt;
+            chown -R $UID:$GID /opt/sisense/storage/custom-certificates/ 2>/dev/null;
+        {{- else }}
+        command:
+          - "/bin/sh"
+          - "-ecx"
+          - |
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/sdk;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/audit;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/usage;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/resources;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/datasets;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/external-plugins;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/branding;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/styles;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/emails;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/exports;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/reports;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/notebooks;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/backups;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/samples;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/plugins;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/build-plugins;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/system_backups;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/translations;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/licensing;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/connectors;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/data;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/serverSidePlugins;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/custom-certificates;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/monitoring-custom-tests;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/farms;
+            install -d -m 0755 -o $UID -g $GID /opt/sisense/storage/tenants;
+            find /opt/sisense/storage -maxdepth 1 -type f -name "*report*.png" -print0 | xargs -0 rm -f;
+            find /opt/sisense/storage/reports -type f -mtime +7 -name "*.png" -print0 | xargs -0 rm -f;
+            chown -R $UID:$GID /opt/sisense/storage/plugins/ 2>/dev/null;
+            touch /opt/sisense/storage/custom-certificates/ca-certificates.crt;
+            chown -R $UID:$GID /opt/sisense/storage/custom-certificates/ 2>/dev/null;
+        {{- end }}
+        volumeMounts:
+        - mountPath: /opt/sisense/storage
+          name: storage
+      - name: create-license
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command:
+          - "/bin/sh"
+          - "-cx"
+        {{- if .Values.global.securityContext }}
+          - >
+            install -m 0755 -o {{ .Values.global.securityContext.runAsUser }} -g {{ .Values.global.securityContext.runAsGroup }} /license/LICENSE /opt/sisense/storage/licensing/LICENSE
+        {{- else }}
+          - >
+            install -m 0755  -o {{ .Values.securityContext.runAsUser }}  -g {{ .Values.securityContext.runAsGroup }} /license/LICENSE /opt/sisense/storage/licensing/LICENSE
+        {{- end }}    
+        volumeMounts:
+        - mountPath: /opt/sisense/storage
+          name: storage
+        - mountPath: /license
+          name: 3rdparty-license2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "filebrowser.name" . }}
+  labels: {{- include "filebrowser.labels" . | nindent 4 }}
+spec:
+ selector:
+  app: {{ template "filebrowser.name" . }}
+ ports:
+  - name: {{ template "filebrowser.name" . }}
+    port: 8989
+    targetPort: 8989
+ type: ClusterIP

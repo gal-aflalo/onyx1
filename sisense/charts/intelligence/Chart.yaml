@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense intelligence
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: intelligence
+version: 1.0.0

@@ -1,0 +1,32 @@
+Sisense version {{ .Chart.AppVersion }} helm chart has been deployed sucessfully.
+It may take a few minutes for the validator pod to complete.
+For checking its status, run command below:
+  kubectl logs -f --namespace {{ .Release.Namespace }} -l app.kubernetes.io/name=validator
+
+{{- if ne (.Values.global.storageType | default "hostPath" | lower) "hostpath" }}
+{{- if eq (.Values.global.storageType | default "" | lower) "fsx" }}
+
+Using AWS FSx For Lustre.
+FSx DNS name: {{ (index .Values "sisense-utils").fsxDnsName | default "" }}
+FSx Mount name: {{ (index .Values "sisense-utils").fsxMountName | default "" }}
+{{- end }}
+
+The Persistence Volumes sizes are:
+
+Sisense PV Size: {{ (index .Values "sisense-utils").sisenseDiskSize }}Gi
+ZooKeeper HA Each PV Size: {{ .Values.zookeeper.persistence.size }}
+{{- if .Values.mongodb.enabled }}
+Mongodb Replicaset Each PV Size: {{ .Values.mongodb.persistence.size }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.global.cloudLoadBalancer.enabled }}
+
+It may take a few minutes for the LoadBalancer IP to be available.
+For watching the status of the LoadBalancer creation, run command below:
+  kubectl get svc --namespace {{ .Release.Namespace }} -w api-gateway-external
+{{- end }}
+
+For accessing Sisense CLI and Completion file, run commands below:
+  kubectl get cm --namespace {{ .Release.Namespace }} add-completion -ojsonpath='{.data.*}' > add_completion-{{ .Release.Namespace }}.sh
+  source add_completion-{{ .Release.Namespace }}.sh

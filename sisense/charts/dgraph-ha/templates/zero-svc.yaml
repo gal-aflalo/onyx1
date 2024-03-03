@@ -1,0 +1,22 @@
+{{- if .Values.global.clusterMode.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "dgraph.zero.fullname" . }}
+  labels: {{- include "dgraph-ha.labels" . | nindent 4 }}
+    component: {{ .Values.zero.name }}
+spec:
+  type: {{ .Values.zero.service.type }}
+  ports:
+  - port: 5080
+    targetPort: 5080
+    name: zero-grpc
+  - port: 6080
+    targetPort: 6080
+    name: zero-http
+  selector:
+    app: {{ template "dgraph.name" . }}
+    chart: {{ template "dgraph.chart" . }}
+    release: {{ .Release.Name }}
+    component: {{ .Values.zero.name }}
+{{- end }}

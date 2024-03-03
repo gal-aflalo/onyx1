@@ -1,0 +1,17 @@
+{{- if .Values.resourceQuota.enabled }}
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: sisense-limit-range
+  labels: {{- include "sisense-utils.labels" . | nindent 4 }}
+spec:
+  limits:
+  - default:
+      memory: 750Mi
+      cpu: 500m
+    defaultRequest:
+      cpu: 1m
+      memory: 1Mi
+    type: Container
+{{- end}}

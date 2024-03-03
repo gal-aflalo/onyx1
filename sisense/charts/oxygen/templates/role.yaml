@@ -1,0 +1,18 @@
+{{- if .Values.rbac.create -}}
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ template "oxygen.fullname" . }}
+  labels: {{- include "oxygen.labels" . | nindent 4 }}
+rules:
+- apiGroups: ["", "apps", "extensions"]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch", "patch"]
+- apiGroups: ["", "apps", "extensions"]
+  resources: ["pods"]
+  verbs: ["list", "delete", "deletecollection"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["fluentd-kinesis"]
+  verbs: ["get", "watch", "list", "patch"]
+{{- end -}}

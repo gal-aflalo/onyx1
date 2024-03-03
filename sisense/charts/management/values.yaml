@@ -1,0 +1,87 @@
+# Default values
+
+replicaCount: 1
+
+image:
+  repository:
+  tag: latest
+  pullPolicy: IfNotPresent
+
+monetdb_image_tag: latest
+utils_image_tag: L8.0.0
+awsFsxCsiDriverVersion: v0.8.1
+
+## Deployed on OpenShift Cluster
+openshift:
+  enabled: false
+
+rbac:
+  # Specifies whether a rbac should be created
+  create: true
+  # Specifies whether a roles should be namespaced
+  namespaced: false
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  seLinuxOptions:
+    level: "s0:c123,c456"
+# If the volume has a lot of files then setting volume ownership could be slow, see https://github.com/kubernetes/kubernetes/issues/69699
+  # fsGroup: 1000
+
+## VPM Mode enabled
+vpn:
+  enabled: false
+
+resources_small:
+  limits:
+    cpu: 5
+    memory: 2500Mi
+
+resources_large:
+  limits:
+    cpu: 5
+    memory: 3000Mi
+
+resources:
+  # limits:
+  #   cpu: 5
+  #   memory: 2500Mi
+  requests:
+    cpu: 15m
+    memory: 650Mi
+
+## Pod topology spread constraints
+## https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+## The value is evaluated as a template
+topologySpreadConstraints: []
+
+nodeSelector: {}
+
+tolerations: []
+
+podAnnotations: {}
+
+# Referring to existing secrets and configMaps
+secrets: []
+configMaps: []
+
+affinity: {}
+
+## StrategyType
+## Can be set to RollingUpdate or Recreate
+updateStrategy: {}
+
+networkPolicy:
+  enabled: false
+
+

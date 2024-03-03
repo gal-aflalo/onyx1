@@ -1,0 +1,274 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "infusion.name" . }}
+  labels: {{- include "infusion.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "infusion.name" . }}
+  replicas: {{ .Values.replicaCount }}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels: {{- include "infusion.labels" . | nindent 8 }}
+        {{- if .Values.global.exposeNodePorts.enabled }}
+        network_policy: bypass
+        {{- end }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "infusion.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - env:
+        - name: DB_CONNECTION_STRING
+          valueFrom:
+            configMapKeyRef:
+              key: DB_CONNECTION_STRING
+              name: global-configuration
+        - name: IS_KUBERNETES
+          value: 'true'
+        - name: ZOOKEEPER_CONN_STRING
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: ZOOKEEPER_CONN_STRING
+        - name: NODE_ENV
+          value: 'production'
+        - name: RABBITMQ_CONN_STRING
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: RABBITMQ_CONN_STRING
+        - name: INTERNAL_RPC_PORT
+          value: "{{ .Values.infusionSlack.rpcPort}}"
+        - name: LOGS_PATH
+          value: '/var/log/sisense'
+        - name: ENCRYPTION_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: infusion-secret
+              key: token
+        - name: WEBSERVER_PORT
+          value: "{{ .Values.infusionSlack.port}}"
+        - name: DATABASE_NAME
+          value: "{{.Values.infusionSlack.databaseName}}"
+        name: "{{ .Chart.Name }}-slack"
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}-slack:{{ .Values.infusionSlack.slackVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.infusionSlack.port }}
+      - env:
+        - name: DB_CONNECTION_STRING
+          valueFrom:
+            configMapKeyRef:
+              key: DB_CONNECTION_STRING
+              name: global-configuration
+        - name: IS_KUBERNETES
+          value: 'true'
+        - name: ZOOKEEPER_CONN_STRING
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: ZOOKEEPER_CONN_STRING
+        - name: NODE_ENV
+          value: 'production'
+        - name: RABBITMQ_CONN_STRING
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: RABBITMQ_CONN_STRING
+        - name: INTERNAL_RPC_PORT
+          value: "{{.Values.infusionTeams.rpcPort}}"
+        - name: LOGS_PATH
+          value: '/var/log/sisense'
+        - name: ENCRYPTION_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: infusion-secret
+              key: token
+        - name: WEBSERVER_PORT
+          value: "{{.Values.infusionTeams.port}}"
+        - name: DATABASE_NAME
+          value: "{{.Values.infusionTeams.databaseName}}"
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}-teams:{{ .Values.infusionTeams.teamsVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        name: "{{ .Chart.Name }}-teams"
+        ports:
+        - containerPort: {{ .Values.infusionTeams.port }}
+      - env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        - name: DB_CONNECTION_STRING
+          valueFrom:
+            configMapKeyRef:
+              key: DB_CONNECTION_STRING
+              name: global-configuration
+        - name: IS_KUBERNETES
+          valueFrom:
+            configMapKeyRef:
+              key: IS_KUBERNETES
+              name: global-configuration
+        - name: ZOOKEEPER_CONN_STRING
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: ZOOKEEPER_CONN_STRING
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: NODE_ENV
+        - name: RABBITMQ_CONN_STRING
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: RABBITMQ_CONN_STRING
+        - name: INTERNAL_RPC_PORT
+          value: "{{.Values.infusion.rpcPort}}"
+        - name: LOGS_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: LOGS_PATH
+        - name: ENCRYPTION_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: infusion-secret
+              key: token
+        - name: IGNORE_SISENSE_AUTH
+          value: 'true'
+        - name: DEFAULT_REDIRECT_URI
+          value: '/api/v1/infusion/ui/web/message'
+        - name: WEBSERVER_PORT
+          value: "{{.Values.infusion.port}}"
+        - name: DATABASE_NAME
+          value: "{{.Values.infusion.databaseName}}"
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}-service:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        name: "{{ .Chart.Name }}-service"
+        resources:
+{{ toYaml .Values.resources | indent 10 }}
+        ports:
+        - containerPort: {{ .Values.port }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "infusion.name" . }}
+  labels: {{- include "infusion.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ template "infusion.name" . }}
+  type: ClusterIP
+  ports:
+  - name: {{.Values.infusion.name}}
+    protocol: TCP
+    port: {{.Values.infusion.port}}
+    targetPort: {{.Values.infusion.targetPort}}
+  - name: internal-http-rpc
+    port: {{.Values.infusion.rpcPort}}
+    protocol: TCP
+    targetPort: {{.Values.infusion.rpcTargetPort}}
+
+{{- if eq .Values.infusionTeams.enabled true }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "infusion.name" . }}-teams
+  labels: {{- include "infusion.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ template "infusion.name" . }}
+  type: ClusterIP
+  ports:
+  - name: {{.Values.infusionTeams.name}}
+    protocol: TCP
+    port: {{.Values.infusionTeams.port}}
+    targetPort: {{.Values.infusionTeams.targetPort}}
+  - name: internal-http-rpc
+    port: {{.Values.infusionTeams.rpcPort}}
+    protocol: TCP
+    targetPort: {{.Values.infusionTeams.rpcTargetPort}}
+{{- end }}
+
+{{- if eq .Values.infusionSlack.enabled true }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "infusion.name" . }}-slack
+  labels: {{- include "infusion.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ template "infusion.name" . }}
+  type: ClusterIP
+  ports:
+  - name: {{.Values.infusionSlack.name}}
+    protocol: TCP
+    port: {{.Values.infusionSlack.port}}
+    targetPort: {{.Values.infusionSlack.targetPort}}
+  - name: internal-http-rpc
+    port: {{.Values.infusionSlack.rpcPort}}
+    protocol: TCP
+    targetPort: {{.Values.infusionSlack.rpcTargetPort}}
+{{- end }}

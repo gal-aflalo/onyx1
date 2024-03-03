@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense customcode POD - running Jupyter notebooks during build and live query 
+maintainers:
+- email: eliad.maimon@sisense.com
+  name: Eliad Maimon
+name: customcode
+version: 1.0.0

@@ -1,0 +1,77 @@
+{{- if or (.Values.global.ssl.enabled) (.Values.ingress.awsAlb) (eq (.Values.global.gatewayPort | int) 80 ) }}
+
+{{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1" }}
+apiVersion: networking.k8s.io/v1
+{{ else if .Capabilities.APIVersions.Has "networking.k8s.io/v1beta1" }}
+apiVersion: networking.k8s.io/v1beta1
+{{ else }}
+apiVersion: extensions/v1beta1
+{{ end -}}
+kind: Ingress
+metadata:
+  name: sisense-ingress
+  labels: {{- include "api-gateway.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/tls-acme: 'true'
+  {{- if .Values.ingress.awsAlb }}
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/target-type: instance
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    {{- if gt (len .Values.ingress.certificateArn) 0 }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.certificateArn | quote }}
+    {{- end }}
+  {{- else }}
+    kubernetes.io/ingress.class: nginx
+  {{- if .Values.global.ssl.enabled }}  
+    nginx.ingress.kubernetes.io/ssl-ciphers: 'ECDH+AESGCM:ECDH+CHACHA20:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS:!AESCCM'
+    nginx.ingress.kubernetes.io/ssl-prefer-server-ciphers: 'true'
+  {{- end }}  
+    nginx.ingress.kubernetes.io/proxy-body-size: 0m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_clear_headers Server;
+  {{- end }}
+  {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  rules:
+  {{- if regexMatch "(?:\\d{1,3}\\.){3}\\d{1,3}" (.Values.global.applicationDnsName | default "") }}
+  - http:
+      paths:
+      {{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1" }}
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway-external
+            port:
+              number: 8456
+      {{- else }}
+      - backend:
+          serviceName: api-gateway-external
+          servicePort: 8456
+      {{- end }}
+  {{- else }}
+  - host: {{ (.Values.global.applicationDnsName |default "" )| replace "http://" "" | replace "https://" "" }}
+    http:
+      paths:
+      {{- if .Capabilities.APIVersions.Has "networking.k8s.io/v1" }}
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway-external
+            port:
+              number: 8456
+      {{- else }}
+      - backend:
+          serviceName: api-gateway-external
+          servicePort: 8456
+      {{- end }}
+  {{ end }}
+{{- if and (.Values.global.ssl.enabled) (not .Values.ingress.awsAlb) }}
+  tls:
+    - secretName: {{ .Values.tls_secret_name }}
+{{- end }}
+{{- end }}

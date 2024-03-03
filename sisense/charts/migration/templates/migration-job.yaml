@@ -1,0 +1,113 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "migration.name" . }}-{{ randAlphaNum 5 | lower }}
+  labels: {{- include "migration.labels" . | nindent 4 }}
+spec:
+  parallelism: 1
+  completions: 1
+  backoffLimit: 3
+  template:
+    metadata:
+      name: {{ template "migration.name" . }}
+      labels: {{- include "migration.labels" . | nindent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      serviceAccountName: {{ include "migration.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      restartPolicy: Never
+      containers:
+        - name: migration
+          image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+        {{- if .Values.global.securityContext }}
+        {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+            - name: HOME
+              value: "/tmp"
+        {{- end }}
+        {{- else if .Values.securityContext.runAsUser }}
+        {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+            - name: HOME
+              value: "/tmp"
+        {{- end }}
+        {{- end }}
+            - name: 'CONTAINER_MEMORY_LIMIT'
+              valueFrom:
+                resourceFieldRef:
+                  containerName: migration
+                  resource: limits.memory
+                  divisor: '1Mi'
+            - name: 'NODE_OPTIONS'
+              value: "$(DEFAULT_NODE_OPTIONS) --max-old-space-size=$(CONTAINER_MEMORY_LIMIT)"
+            - name: ENABLE_WIDGET_DELTAS
+              value: {{ .Values.global.enableWidgetDeltas | quote }}
+          envFrom:
+          {{- if .Values.configMaps }}
+          - configMapRef:
+          {{- range .Values.configMaps }}
+              name: {{ . }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.secrets }}
+          - secretRef:
+          {{- range .Values.secrets }}
+              name: {{ . }}
+          {{- end }}
+          {{- end }}
+          - configMapRef:
+              name: global-configuration
+          volumeMounts:
+          - mountPath: /opt/sisense/storage
+            name: storage
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      volumes:
+{{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+{{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+{{- end }}
+      initContainers:
+        - name: init-configuration
+          image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+          command: ['sh', '-c', 'until nc -zv configuration.{{ .Release.Namespace }} 3030 -w1; do echo waiting for configuration; sleep 2; done;']

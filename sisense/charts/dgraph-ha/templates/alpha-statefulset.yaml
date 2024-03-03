@@ -1,0 +1,213 @@
+{{- if .Values.global.clusterMode.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: "{{ template "dgraph.alpha.fullname" . }}"
+  labels: {{- include "dgraph-ha.labels" . | nindent 4 }}
+    component: {{ .Values.alpha.name }}
+    {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+    nlq: "true"
+    {{- end }}
+    dgraph: "dgraph"
+spec:
+  serviceName: {{ template "dgraph.alpha.fullname" . }}-headless
+  replicas: {{ .Values.alpha.replicaCount }}
+  podManagementPolicy: {{ .Values.alpha.podManagementPolicy | quote }}
+  updateStrategy:
+    type: {{ .Values.alpha.updateStrategy | quote }}
+    {{- if (eq "Recreate" .Values.alpha.updateStrategy) }}
+    rollingUpdate: null
+    {{- else if .Values.alpha.rollingUpdatePartition }}
+    rollingUpdate:
+      partition: {{ .Values.alpha.rollingUpdatePartition }}
+    {{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "dgraph.name" . }}
+      chart: {{ template "dgraph.chart" . }}
+      release: {{ .Release.Name }}
+      component: {{ .Values.alpha.name }}
+      {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+      nlq: "true"
+      {{- end }}
+  template:
+    metadata:
+      name: "{{ template "dgraph.alpha.fullname" . }}"
+      labels: {{- include "dgraph-ha.labels" . | nindent 8 }}
+        component: {{ .Values.alpha.name }}
+        {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+        nlq: "true"
+        {{- end }}
+        dgraph: "dgraph"
+    spec:
+      serviceAccountName: {{ include "dgraph.serviceAccountName" . }}
+      {{- if .Values.alpha.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.alpha.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.alpha.affinity }}
+      affinity: {{ toYaml .Values.alpha.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{.Release.Name}}-Application"
+                operator: In
+                values:
+                - "true"
+        {{- if .Values.global.highAvailability }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: component
+                operator: In
+                values:
+                - {{ .Values.alpha.name }}
+            topologyKey: {{ .Values.alpha.podAntiAffinitytopologyKey }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.alpha.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.alpha.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.alpha.nodeSelector | indent 8 }}
+      {{- end }}
+      {{- if .Values.alpha.tolerations }}
+      tolerations:
+{{ toYaml .Values.alpha.tolerations | indent 8 }}
+      {{- end }}
+      {{- if .Values.global.securityContext }}
+      {{- if eq (.Values.global.securityContext.runAsUser | toString) "1000" }}
+      initContainers:
+        - name: init-chown-data
+          image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+          imagePullPolicy: {{ .Values.initChownData.image.pullPolicy }}
+          securityContext:
+            runAsUser: 0
+          command: ["chown", "-R", "{{ .Values.global.securityContext.runAsUser }}:{{ .Values.global.securityContext.runAsGroup }}", "/dgraph"]
+          resources:
+      {{ toYaml .Values.initChownData.resources | indent 12 }}
+          volumeMounts:
+            - name: datadir
+              mountPath: /dgraph
+      {{- end }}
+      {{- else if eq (.Values.securityContext.runAsUser | toString) "1000" }}
+      initContainers:
+        - name: init-chown-data
+          image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+          imagePullPolicy: {{ .Values.initChownData.image.pullPolicy }}
+          securityContext:
+            runAsUser: 0
+          command: ["chown", "-R", "{{ .Values.securityContext.runAsUser }}:{{ .Values.securityContext.runAsGroup }}", "/dgraph"]
+          resources:
+      {{ toYaml .Values.initChownData.resources | indent 12 }}
+          volumeMounts:
+            - name: datadir
+              mountPath: /dgraph
+      {{- end }}
+      containers:
+      - name: "{{ template "dgraph.alpha.fullname" . }}"
+        image: "{{ .Values.global.imageRegistry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        ports:
+        - containerPort: 7080
+          name: alpha-grpc-int
+        - containerPort: 8080
+          name: alpha-http
+        - containerPort: 9080
+          name: alpha-grpc
+        imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+        env:
+        {{- if and (.Values.alpha.securityContext.runAsUser| default "1000") ( ne (.Values.alpha.securityContext.runAsUser | default "1000" | toString) "1000" ) }}
+          - name: HOME
+            value: "/tmp"
+        {{- end }}
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        command:
+         - bash
+         - "-c"
+         - |
+            set -ex
+            echo "v1"
+            dgraph alpha --my=$(hostname -f | awk '{gsub(/\.$/,""); print $0}'):7080 --zero {{ template "multi_zeros" . }} {{ .Values.alpha.extraFlags }}
+        resources:
+{{ toYaml .Values.alpha.resources | indent 10 }}
+        {{- if .Values.alpha.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            port: {{ .Values.alpha.livenessProbe.port }}
+            path: {{ .Values.alpha.livenessProbe.path }}
+          initialDelaySeconds: {{ .Values.alpha.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.alpha.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.alpha.livenessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.alpha.livenessProbe.successThreshold }}
+          failureThreshold: {{ .Values.alpha.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.alpha.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            port: {{ .Values.alpha.livenessProbe.port }}
+            path: {{ .Values.alpha.livenessProbe.path }}
+          initialDelaySeconds: {{ .Values.alpha.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.alpha.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.alpha.readinessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.alpha.readinessProbe.successThreshold }}
+          failureThreshold: {{ .Values.alpha.readinessProbe.failureThreshold }}
+        {{- end }}
+        volumeMounts:
+        {{- if .Values.alpha.persistence.enabled }}
+        - name: datadir
+          mountPath: /dgraph
+        {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.alpha.terminationGracePeriodSeconds }}
+      volumes:
+{{- if .Values.alpha.persistence.enabled }}
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: datadir
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+        annotations:
+          volume.alpha.kubernetes.io/storage-class: anything
+      spec:
+        accessModes:
+        {{- range .Values.alpha.persistence.accessModes }}
+          - {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.alpha.persistence.size | quote }}
+      {{- if .Values.global.storageClass }}
+      {{- if (eq "-" .Values.global.storageClass) }}
+        storageClassName: ""
+      {{- else }}
+        storageClassName: {{ .Values.global.storageClass | quote }}
+      {{- end -}}
+      {{- end -}}
+{{- else }}
+        - name: datadir
+          emptyDir: {}
+{{- end }}
+{{- end }}

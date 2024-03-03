@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "customcode.name" . }}
+  labels: {{- include "customcode.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "customcode.name" . }}
+  replicas: 1
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- else if eq .Values.global.imageRegistry "docker.artifactory.sisense.com"}}
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  {{- end }}
+  template:
+    metadata:
+      labels: {{- include "customcode.labels" . | nindent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "customcode.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      # Added init-api-gateway so first it will wait for filebrowser to finish chown in the /opt/sisense/stroage
+      # (Otherwise "permission denied" in the filebrowser and in customcode)
+      initContainers:
+      - name: init-api-gateway
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv api-gateway.{{ .Release.Namespace }} 8456 -w1; do echo waiting for api-gateway; sleep 2; done;']
+      containers:
+      - env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        - name: JUPYTER_NOTEBOOK_PORT
+          value: "8888"
+        - name: EXTERNAL_ADDRESS
+          value: "customcode.$(NAMESPACE_NAME)"
+        - name: SISENSE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: SISENSE_VERSION
+        - name: SERVICE_VERSION
+          value: "{{ .Values.image.tag }}"
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        resources:
+          limits: 
+            cpu: {{ include "customcode.limits.cpu" . }}
+            memory: {{ include "customcode.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        name: customcode
+        ports:
+        - containerPort: 8888
+        command:
+          - diag_init.sh
+        args:
+          - --NotebookApp.token=''
+          - --NotebookApp.disable_check_xsrf=True
+          - --NotebookApp.base_url='/app/diag'
+          - --NotebookApp.allow_origin='*'
+          - --NotebookApp.terminals_enabled=False
+          - --MappingKernelManager.cull_idle_timeout=60
+        volumeMounts:
+{{- if .Values.global.clusterMode.enabled }}
+        - mountPath: /opt/sisense/storage/notebooks
+          name: storage
+          subPath: notebooks
+        - mountPath: /opt/sisense/storage/branding
+          name: storage
+          subPath: branding
+        - mountPath: /opt/sisense/storage/data
+          name: storage
+          subPath: data
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+{{- else }}
+        - mountPath: /opt/sisense/storage/notebooks
+          name: storagenotebooks
+        - mountPath: /opt/sisense/storage/data
+          name: storagedata
+        - mountPath: /opt/sisense/storage/branding
+          name: storagebranding
+      volumes:
+      - hostPath:
+          path: /opt/sisense/storage/notebooks
+          type: DirectoryOrCreate
+        name: storagenotebooks
+      - hostPath:
+          path: /opt/sisense/storage/data
+          type: DirectoryOrCreate
+        name: storagedata
+      - hostPath:
+          path: /opt/sisense/storage/branding
+          type: DirectoryOrCreate
+        name: storagebranding
+{{- end }}
+      restartPolicy: Always
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}

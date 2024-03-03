@@ -1,0 +1,28 @@
+global:
+  external_kube_apiserver_address: "http://1.2.3.4:30845"
+  kube_apiserver_port: 6443
+  clusterMode:
+    enabled: false
+  repository: docker.artifactory.sisense.com
+  gatewayPort: 30845
+  ssl:
+    enabled: false
+  exposeNodePorts:
+    enabled: false
+  k8s_node_1: node1
+  kubeNetworkPlugin: calico
+  isKubernetesCloud: false
+  kubernetesCloudProvider: ""
+  highAvailability: false
+  cloudLoadBalancer:
+    enabled: false
+  storageType: "hostPath"
+  kubernetes_version: v1.17.6
+  clusterAutoScaler:
+    enabled: false
+  serviceAccountAnnotations: {}
+
+warehouse:
+  warehouse_sels_url: https://auth.cloud.sisense.com
+  warehouse_dec_id: us-west-2.dec.sisense.com
+  warehouse_dec_graphql_url: https://dec.usw.cloud.sisense.com/graphql

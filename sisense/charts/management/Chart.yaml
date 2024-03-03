@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense Management
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: management
+version: 1.0.0

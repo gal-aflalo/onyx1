@@ -1,0 +1,47 @@
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: deny-all-ns
+  labels: {{- include "sisense-utils.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+  ingress:
+  - from:
+    - podSelector: {}
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: allow-api-gateway-ext
+  labels: {{- include "sisense-utils.labels" . | nindent 4 }}
+spec:
+  podSelector:
+{{- if .Values.global.exposeNodePorts.enabled }}
+#   matchExpressions:
+    matchLabels:
+      network_policy: bypass
+#    - {key: app, operator: In, values: [api-gateway,build,connectors-debug,management,query,sisense-mongodb-service-out,sisense-rabbitmq-external,sisense-zookeeper-external,translation]}
+{{- else}}
+    matchLabels:
+      app: api-gateway
+{{- end}}
+  ingress:
+  - from: []
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: allow-monitoring
+  labels: {{- include "sisense-utils.labels" . | nindent 4 }}
+spec:
+  podSelector: 
+    matchLabels:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring

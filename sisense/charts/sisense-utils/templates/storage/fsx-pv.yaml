@@ -1,0 +1,36 @@
+{{ if eq (.Values.global.storageType |lower) "fsx" }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: "{{ .Release.Namespace }}-storage-pv"
+  annotations:
+    meta.helm.sh/release-namespace: "{{ .Release.Namespace }}"
+  labels:
+    app.kubernetes.io/managed-by: "{{ .Release.Service }}"
+spec:
+  capacity:
+    storage: "{{ .Values.sisenseDiskSize }}Gi"
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  mountOptions:
+    - flock
+  claimRef:
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    name: storage
+    namespace: "{{ .Release.Namespace }}"
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: aws-fsx
+  csi:
+    driver: fsx.csi.aws.com
+    volumeHandle: {{ (split "." .Values.fsxDnsName)._0 | quote }}
+    volumeAttributes:
+      dnsname: {{ .Values.fsxDnsName | quote }}
+      {{- if contains "/" .Values.fsxMountName }}
+      mountname: "{{ .Values.fsxMountName | default "fsx" }}{{ .Release.Namespace }}"
+      {{- else }}
+      mountname: "{{ .Values.fsxMountName | default "fsx" }}"
+      {{- end }}
+      # mountname: {{ (split "/" .Values.fsxMountName)._0 | quote }}
+{{ end }}

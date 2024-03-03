@@ -1,0 +1,76 @@
+# Default values
+
+# replicaCount: 1
+image:
+  pullPolicy: IfNotPresent
+
+rbac:
+  # Specifies whether a rbac should be created
+  create: true
+  # Specifies whether a roles should be namespaced
+  namespaced: false
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+awsFsxCsiDriverVersion: v0.8.1
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  seLinuxOptions:
+    level: "s0:c123,c456"
+# If the volume has a lot of files then setting volume ownership could be slow, see https://github.com/kubernetes/kubernetes/issues/69699
+  # fsGroup: 1000
+
+resources_small:
+  limits:
+    cpu: 1300m
+    memory: 500Mi
+
+resources_large:
+  limits:
+    cpu: 1300m
+    memory: 500Mi
+
+resources:
+  # limits:
+  #   cpu: 1500m
+  #   memory: 500Mi
+  requests:
+    cpu: 100m
+    memory: 120Mi
+
+## Pod topology spread constraints
+## https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+## The value is evaluated as a template
+topologySpreadConstraints: []
+
+nodeSelector: {}
+
+tolerations: []
+
+podAnnotations: {}
+
+# Referring to existing secrets and configMaps
+secrets: []
+configMaps: []
+
+affinity: {}
+
+## StrategyType
+## Can be set to RollingUpdate or Recreate
+updateStrategy: {}
+
+keda:
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  stabilizationWindowSeconds: 300
+  pollingInterval: 30
+  scaleUpPercent: 50

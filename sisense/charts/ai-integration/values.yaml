@@ -1,0 +1,76 @@
+# Default values
+
+# replicaCount: 1
+image:
+  pullPolicy: IfNotPresent
+
+awsFsxCsiDriverVersion: v0.8.1
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  seLinuxOptions:
+    level: "s0:c123,c456"
+# If the volume has a lot of files then setting volume ownership could be slow, see https://github.com/kubernetes/kubernetes/issues/69699
+  # fsGroup: 1000
+
+resources_small:
+  limits:
+    cpu: 1300m
+    memory: 2000Mi
+
+resources_large:
+  limits:
+    cpu: 1300m
+    memory: 2000Mi
+
+resources:
+  # limits:
+  #   cpu: 1300m
+  #   memory: 2000Mi
+  requests:
+    cpu: 100m
+    memory: 120Mi
+
+## Pod topology spread constraints
+## https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+## The value is evaluated as a template
+topologySpreadConstraints: []
+
+nodeSelector: {}
+
+tolerations: []
+
+podAnnotations: {}
+
+# Referring to existing secrets and configMaps
+secrets: []
+configMaps: []
+
+affinity: {}
+
+## StrategyType
+## Can be set to RollingUpdate or Recreate
+updateStrategy: {}
+
+ai_sels_url: "https://auth.cloud.sisense.com"
+ai_dec_id: "ai"
+ai_timeseries_url: "https://api.usw.cloud.sisense.com/air/timeseries/v1/"
+ai_drivers_url: "https://api.usw.cloud.sisense.com/air/drivers"
+
+keda:
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  stabilizationWindowSeconds: 300
+  pollingInterval: 30
+  scaleUpPercent: 50
+  

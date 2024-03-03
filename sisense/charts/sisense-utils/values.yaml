@@ -1,0 +1,91 @@
+# Default values for sisense-configmap.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+## Default values Logz.io configmap
+sisense_ownerid: devops@sisense.com
+internal_monitoring: false
+external_monitoring: false
+deployment_id: "deployment_id"
+license_id: "license_id"
+is_efk: false
+logz_key: ""
+
+## Sisense timezone
+timezone: "UTC"
+
+## Sisense storage chowner pod values
+imagePullPolicy: IfNotPresent
+
+
+## Resouce quota for each namespace
+resourceQuota:
+  enabled: false
+  limits_cpu: 82
+  limits_memory: 87
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  seLinuxOptions:
+    level: "s0:c123,c456"
+  fsGroup: 1000
+
+## delay for starting storage-manager process 
+storageManager:
+  delay: 30
+  
+awsFsxCsiDriverVersion: v0.8.1
+
+podAnnotations: {}
+
+# New Relic configuration
+apm:
+  enabled: false
+  config:
+    enabled: false
+  distributed_tracing:
+    enabled: false
+  license: ""
+  process_host: ""
+  sisense_version: ""
+
+email_sending_block: false
+
+isMultiTenancy: true
+isManaged: false
+dashboard:
+  enabled: true
+
+dbConnectionString: ""
+
+## storage values
+sisenseDiskSize: 70
+singleZookeeprDiskSize: 5
+singleMongodbDiskSize: 20
+singleDgraphDiskSize: 3
+grafanaDiskSize: 3
+
+azureCsi:
+  enabled: false
+azureDefaultDiskSize: 1200
+rwxScName: ""
+fsxDnsName: ""
+fsxMountName: ""
+
+### not yet
+nfs_csi:
+  enabled: false
+
+userPoolId: ""
+userPoolClientId: ""
+onyxClusterUrl: ""

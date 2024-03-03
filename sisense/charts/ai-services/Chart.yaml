@@ -1,0 +1,7 @@
+apiVersion: v1
+description: ai-services
+maintainers:
+- email: yosef.zecharya@sisense.com
+  name: Yossi Zecharya
+name: ai-services
+version: 1.0.0

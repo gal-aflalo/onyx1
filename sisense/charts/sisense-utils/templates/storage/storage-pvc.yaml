@@ -1,0 +1,43 @@
+{{ if or (.Values.global.clusterMode.enabled) (and (hasKey .Values "rwxScName") (ne .Values.rwxScName "")) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: storage
+  annotations:
+    meta.helm.sh/release-namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+{{- if eq (.Values.global.kubernetesCloudProvider | default "") "azure" }}
+{{- if gt (int .Values.sisenseDiskSize | default 70) (int .Values.azureDefaultDiskSize | default 1200) }}
+      storage: {{ .Values.sisenseDiskSize | default "70" }}Gi
+{{- else }}
+      storage: {{ .Values.azureDefaultDiskSize | default "512" }}Gi
+{{- end }}
+{{- else }}
+      storage: {{ .Values.sisenseDiskSize | default "70" }}Gi
+{{- end }}
+{{- if and (hasKey .Values "rwxScName") (ne .Values.rwxScName "") }}
+  storageClassName: {{ .Values.rwxScName | default "null" }}
+{{- else if eq (.Values.global.storageType | default "") "efs" }}
+  storageClassName: aws-efs
+{{- else if eq (.Values.global.storageType | default "") "fsx" }}
+  storageClassName: aws-fsx
+{{- else if eq (.Values.global.storageType | default "") "nfs" }}
+  storageClassName: nfs-client
+{{- else if eq (.Values.global.storageType | default "") "nfs-server" }}
+  storageClassName: nfs-server
+{{- else if eq (.Values.global.storageType | default "") "rook-ceph" }}
+  storageClassName: rook-cephfs-r3
+{{- else if .Values.global.isOpenshift | default false }}
+  storageClassName: {{ .Values.rwxScName | default "null" }}
+{{- else if and (not .Values.azureCsi.enabled | default false) (eq (.Values.global.kubernetesCloudProvider | default "") "azure") }}
+  storageClassName: sisense-azurefile-premium
+{{- else if and .Values.azureCsi.enabled | default false (eq (.Values.global.kubernetesCloudProvider | default "") "azure") }}
+  storageClassName: sisense-azurefile-csi-premium
+{{- end }}
+{{ end }}

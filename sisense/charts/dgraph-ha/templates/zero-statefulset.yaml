@@ -1,0 +1,222 @@
+{{- if .Values.global.clusterMode.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: "{{ template "dgraph.zero.fullname" . }}"
+  labels: {{- include "dgraph-ha.labels" . | nindent 4 }}
+    component: {{ .Values.zero.name }}
+    {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+    nlq: "true"
+    {{- end }}
+    dgraph: "dgraph"
+spec:
+  serviceName: {{ template "dgraph.zero.fullname" . }}-headless
+  replicas: {{ .Values.zero.replicaCount }}
+  podManagementPolicy: {{ .Values.zero.podManagementPolicy | quote }}
+  updateStrategy:
+    type: {{ .Values.zero.updateStrategy | quote }}
+    {{- if (eq "Recreate" .Values.zero.updateStrategy) }}
+    rollingUpdate: null
+    {{- else if .Values.zero.rollingUpdatePartition }}
+    rollingUpdate:
+      partition: {{ .Values.zero.rollingUpdatePartition }}
+    {{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "dgraph.name" . }}
+      chart: {{ template "dgraph.chart" . }}
+      release: {{ .Release.Name }}
+      component: {{ .Values.zero.name }}
+      {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+      nlq: "true"
+      {{- end }}
+  template:
+    metadata:
+      name: "{{ template "dgraph.zero.fullname" . }}"
+      labels: {{- include "dgraph-ha.labels" . | nindent 8 }}
+        component: {{ .Values.zero.name }}
+        {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+        nlq: "true"
+        {{- end }}
+        dgraph: "dgraph"
+    spec:
+      serviceAccountName: {{ include "dgraph.serviceAccountName" . }}
+      {{- if .Values.zero.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.zero.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zero.affinity }}
+      affinity: {{ toYaml .Values.zero.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{.Release.Name}}-Application"
+                operator: In
+                values:
+                - "true"
+        {{- if .Values.global.highAvailability }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: component
+                operator: In
+                values:
+                - {{ .Values.zero.name }}
+            topologyKey: {{ .Values.zero.podAntiAffinitytopologyKey }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+# {{- include "dgraph.imagePullSecrets" . | indent 6 }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.zero.securityContext }}
+      securityContext:
+        {{- toYaml .Values.zero.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zero.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.zero.nodeSelector | indent 8 }}
+      {{- end }}
+      {{- if .Values.zero.tolerations }}
+      tolerations:
+{{ toYaml .Values.zero.tolerations | indent 8 }}
+      {{- end }}
+      {{- if .Values.global.securityContext }}
+      {{- if eq (.Values.global.securityContext.runAsUser | toString) "1000" }}
+      initContainers:
+        - name: init-chown-data
+          image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+          imagePullPolicy: {{ .Values.initChownData.image.pullPolicy }}
+          securityContext:
+            runAsUser: 0
+          command: ["chown", "-R", "{{ .Values.global.securityContext.runAsUser }}:{{ .Values.global.securityContext.runAsGroup }}", "/dgraph"]
+          resources:
+      {{ toYaml .Values.initChownData.resources | indent 12 }}
+          volumeMounts:
+            - name: datadir
+              mountPath: /dgraph
+      {{- end }}
+      {{- else if eq (.Values.securityContext.runAsUser | toString) "1000" }}
+      initContainers:
+        - name: init-chown-data
+          image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+          imagePullPolicy: {{ .Values.initChownData.image.pullPolicy }}
+          securityContext:
+            runAsUser: 0
+          command: ["chown", "-R", "{{ .Values.securityContext.runAsUser }}:{{ .Values.securityContext.runAsGroup }}", "/dgraph"]
+          resources:
+      {{ toYaml .Values.initChownData.resources | indent 12 }}
+          volumeMounts:
+            - name: datadir
+              mountPath: /dgraph
+      {{- end }}
+      containers:
+      - name: "{{ template "dgraph.zero.fullname" . }}"
+        image: "{{ .Values.global.imageRegistry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        ports:
+        - containerPort: 5080
+          name: zero-grpc
+        - containerPort: 6080
+          name: zero-http
+        imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+        env:
+        {{- if and (.Values.zero.securityContext.runAsUser| default "1000") ( ne (.Values.zero.securityContext.runAsUser | default "1000" | toString) "1000" ) }}
+          - name: HOME
+            value: "/tmp"
+        {{- end }}
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        command:
+          - bash
+          - "-c"
+          - |
+            set -ex
+            echo "v1"
+            [[ `hostname` =~ -([0-9]+)$ ]] || exit 1
+              ordinal=${BASH_REMATCH[1]}
+              idx=$(($ordinal + 1))
+              if [[ $ordinal -eq 0 ]]; then
+                exec dgraph zero --my=$(hostname -f | awk '{gsub(/\.$/,""); print $0}'):5080 {{ template "raft_index_flag" . }}$idx --replicas {{ .Values.zero.shardReplicaCount }} {{ .Values.zero.extraFlags }}
+              else
+                exec dgraph zero --my=$(hostname -f | awk '{gsub(/\.$/,""); print $0}'):5080 --peer {{ template "peer_zero" . }} {{ template "raft_index_flag" . }}$idx --replicas {{ .Values.zero.shardReplicaCount }} {{ .Values.zero.extraFlags }}
+              fi
+        resources:
+{{ toYaml .Values.zero.resources | indent 10 }}
+        {{- if .Values.zero.livenessProbe.enabled }}
+        livenessProbe:
+          httpGet:
+            port: {{ .Values.zero.livenessProbe.port }}
+            path: {{ .Values.zero.livenessProbe.path }}
+          initialDelaySeconds: {{ .Values.zero.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.zero.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.zero.livenessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.zero.livenessProbe.successThreshold }}
+          failureThreshold: {{ .Values.zero.livenessProbe.failureThreshold }}
+        {{- end }}
+        {{- if .Values.zero.readinessProbe.enabled }}
+        readinessProbe:
+          httpGet:
+            port: {{ .Values.zero.livenessProbe.port }}
+            path: {{ .Values.zero.livenessProbe.path }}
+          initialDelaySeconds: {{ .Values.zero.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.zero.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.zero.readinessProbe.timeoutSeconds }}
+          successThreshold: {{ .Values.zero.readinessProbe.successThreshold }}
+          failureThreshold: {{ .Values.zero.readinessProbe.failureThreshold }}
+        {{- end }}
+        volumeMounts:
+        {{- if .Values.zero.persistence.enabled }}
+        - name: datadir
+          mountPath: /dgraph
+        {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.zero.terminationGracePeriodSeconds }}
+      volumes:
+{{- if .Values.zero.persistence.enabled }}
+      - name: datadir
+        persistentVolumeClaim:
+          claimName: datadir
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+        annotations:
+        {{- range $key, $value := .Values.zero.persistence.annotations }}
+          {{ $key }}: {{ $value }}
+        {{- end }}
+          volume.alpha.kubernetes.io/storage-class: anything
+      spec:
+        accessModes:
+        {{- range .Values.zero.persistence.accessModes }}
+          - {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.zero.persistence.size | quote }}
+      {{- if .Values.global.storageClass }}
+      {{- if (eq "-" .Values.global.storageClass) }}
+        storageClassName: ""
+      {{- else }}
+        storageClassName: {{ .Values.global.storageClass | quote }}
+      {{- end -}}
+      {{- end -}}
+{{- else }}
+        - name: datadir
+          emptyDir: {}
+{{- end }}
+{{- end }}

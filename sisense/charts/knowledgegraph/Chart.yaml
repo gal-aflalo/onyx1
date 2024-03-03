@@ -1,0 +1,7 @@
+apiVersion: v1
+description: knowledgegraph
+maintainers:
+- email: devops@sisense.com
+  name: Yaniv Setton
+name: knowledgegraph
+version: 11.0.1

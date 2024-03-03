@@ -1,0 +1,291 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "api-gateway.name" . }}
+  labels: {{- include "api-gateway.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ include "api-gateway.replicas" . }}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "api-gateway.name" . }}
+  template:
+    metadata:
+      labels: {{- include "api-gateway.labels" . | nindent 8 }}
+        {{- if .Values.global.exposeNodePorts.enabled }}
+        network_policy: bypass
+        {{- end }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "api-gateway.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - {{ include "api-gateway.name" . }}
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - command:
+        - /bin/sh
+        - -cx
+        - |
+          export NODE_OPTIONS="$(DEFAULT_NODE_OPTIONS) --max-old-space-size=$((CONTAINER_MEMORY_LIMIT * 80 / 100))";
+          mkdir -p /opt/sisense/storage/styles;
+          mkdir -p /opt/sisense/storage/js;
+          mkdir -p /opt/sisense/storage/resources;
+
+          cp -fr /opt/sisense/storage/styles/* /usr/src/app/client/styles/;
+          cp -fr /opt/sisense/storage/js/* /usr/src/app/client/js/;
+          cp -fr /opt/sisense/storage/resources/* /usr/src/app/client/resources/;
+
+          cd /usr/src/app && npm start;
+        env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        - name: SSL_ENABLED
+          value: "{{ .Values.global.ssl.enabled }}"
+        - name: CLIENT_DIR
+          value: "/usr/src/app/client"
+        - name: NODE_EXTRA_CA_CERTS
+          value: "/opt/sisense/storage/custom-certificates/ca-certificates.crt"
+        - name: MANUAL_DISCOVERY
+          value: "[]"
+        - name: INTERNAL_MONITORING
+          value: "{{ (.Values.global.monitoring).internal | default .Values.internal_monitoring }}"
+        - name: NEW_RELIC_APP_NAME
+          value: "api-gateway"
+        - name: GRAFANA_MOUNT_PATH
+          value: "/app/grafana"
+        - name: GRAFANA_PROXY_URL
+          value: "$(NAMESPACE_NAME)-grafana.$(NAMESPACE_NAME)"
+        - name: GRAFANA_USER_NAME
+          value: "user-$(NAMESPACE_NAME)"
+        - name: GRAFANA_USER_PASSWORD
+          value: "passwd-$(NAMESPACE_NAME)"
+        - name: CDN_URL
+          value: "{{ .Values.image.tag }}"
+        - name: CONFIGURATION_SERVICE_PROXY_URL
+          value: "configuration:3030"
+        - name: 'CONTAINER_MEMORY_LIMIT'
+          valueFrom:
+            resourceFieldRef:
+              containerName: {{ template "api-gateway.name" . }}
+              resource: limits.memory
+              divisor: '1Mi'
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        - configMapRef:
+            name: global-configuration
+        - configMapRef:
+            name: apm-configuration
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        resources:
+          limits: 
+            cpu: {{ include "api-gateway.limits.cpu" . }}
+            memory: {{ include "api-gateway.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        name: {{ template "api-gateway.name" . }}
+        ports:
+        - containerPort: 8456
+        - containerPort: 14991
+        - containerPort: 8457
+        lifecycle:
+          preStop:
+            httpGet:
+              path: prestop
+              port: 8458
+              scheme: HTTP
+        livenessProbe:
+          httpGet:
+            path: /liveness
+            port: 8456
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 20
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 8456
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        volumeMounts:
+        - mountPath: /opt/sisense/storage
+          name: storage
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      volumes:
+{{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+{{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+{{- end }}
+      restartPolicy: Always
+      initContainers:
+      - name: init-configuration
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv configuration.{{ .Release.Namespace }} 3030 -w1; do echo waiting for configuration; sleep 2; done;']
+{{- if eq (include "sisense.update" .) "true" }}
+      - name: init-maintenance-down
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until !(nc -zv api-gateway-maintenance.{{ .Release.Namespace }} 1602 -w1); do echo waiting for maintenance service to become down; sleep 2; done;']
+{{- end }}
+
+---
+{{ $target_type := index .Values.ingress.annotations "alb.ingress.kubernetes.io/target-type" | default "instance" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "api-gateway.name" . }}-external
+  labels: {{- include "api-gateway.labels" . | nindent 4 }}
+  annotations:
+{{- if and (or (.Values.ingress.awsAlb) (.Values.global.cloudLoadBalancer.enabled)) (not .Values.global.ssl.enabled) }}
+  {{- if .Values.global.cloudLoadBalancer.isInternal }}
+    {{- if eq .Values.global.kubernetesCloudProvider "aws" }}
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    {{- else if eq .Values.global.kubernetesCloudProvider "azure" }}
+    service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+    {{- else if eq .Values.global.kubernetesCloudProvider "gke" }}
+    networking.gke.io/load-balancer-type: "Internal"
+    {{- end }}
+  {{- end }}
+{{- end }} 
+spec:
+  ports:
+  - name: http
+    protocol: TCP
+    targetPort: 8456
+{{- if and ( eq $target_type "instance" ) .Values.ingress.awsAlb }}
+    port: 8456
+    nodePort: {{ .Values.global.gatewayPort | default "30845" }}
+  type: NodePort
+{{- else if .Values.global.cloudLoadBalancer.enabled }}
+    port: 80
+  type: LoadBalancer
+{{ else }}
+    port: 8456
+  type: ClusterIP
+{{- end }}
+  selector:
+    app: {{ template "api-gateway.name" . }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "api-gateway.name" . }}
+  labels: {{- include "api-gateway.labels" . | nindent 4 }}
+spec:
+{{- if and (not .Values.global.ssl.enabled) (not .Values.global.cloudLoadBalancer.enabled) (ne (.Values.global.gatewayPort | int) 80 ) (not .Values.ingress.awsAlb) }}
+  type: NodePort
+  ports:
+  - name: http
+    protocol: TCP
+    targetPort: 8456
+    port: 8456
+    nodePort: {{ .Values.global.gatewayPort }}
+{{- else }}
+  type: ClusterIP
+  ports:
+  - name: http
+    protocol: TCP
+    targetPort: 8456
+    port: 8456
+{{- end }}
+  selector:
+    app: {{ template "api-gateway.name" . }}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "api-gateway.name" . }}-internal
+  labels: {{- include "api-gateway.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - name: http-internal
+    protocol: TCP
+    port: 14991
+    targetPort: 14991
+  - name: internal-http-rpc
+    port: 8457
+    protocol: TCP
+    targetPort: 8457
+  selector:
+    app: {{ template "api-gateway.name" . }}

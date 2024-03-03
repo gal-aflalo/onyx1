@@ -1,0 +1,242 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "usage.name" . }}
+  labels: {{- include "usage.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "usage.name" . }}
+  replicas: {{ .Values.replicaCount }}
+  #Can be created over the desired replicas number
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels: {{- include "usage.labels" . | nindent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "usage.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - name: {{ template "usage.name" . }}
+        env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        - name: CSV_PATH
+          value: "/opt/sisense/storage/usage/usage.csv"
+        - name: INTERNAL_RPC_PORT
+          value: "8458"
+        - name: WEBSERVER_PORT
+          value: "3040"
+        - name: 'CONTAINER_MEMORY_LIMIT'
+          valueFrom:
+            resourceFieldRef:
+              containerName: {{ template "usage.name" . }}
+              resource: limits.memory
+              divisor: '1Mi'
+        - name: 'NODE_OPTIONS'
+          value: "$(DEFAULT_NODE_OPTIONS) --max-old-space-size=$(CONTAINER_MEMORY_LIMIT)"
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        - configMapRef:
+            name: global-configuration
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        ports:
+        - containerPort: 3040
+        - containerPort: 8457
+        resources:
+          limits: 
+            cpu: {{ include "usage.limits.cpu" . }}
+            memory: {{ include "usage.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        startupProbe:
+          httpGet:
+            path: /liveness
+            port: 3040
+          failureThreshold: 20
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /liveness
+            port: 3040
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 20
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 3040
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        volumeMounts:
+        - mountPath: /opt/sisense/storage
+          name: storage
+      - name: {{ template "monitoring.name" . }}
+        env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        - name: WEBSERVER_PORT
+          value: "8001"
+        - name: RABBITMQ_CONN_STRING
+          value: "amqp://{{ .Release.Name }}-rabbitmq.{{ .Release.Namespace }}:5672"
+        - name: 'NODE_OPTIONS'
+          value: "$(DEFAULT_NODE_OPTIONS)"  
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        - configMapRef:
+            name: global-configuration
+        image: "{{ .Values.global.imageRegistry }}/{{ include "monitoring.name" . }}:{{ .Values.monitoring.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        resources:
+          limits:
+            cpu: 1
+            memory: 1000Mi
+          requests:
+            cpu: 1m
+            memory: 67Mi
+        volumeMounts:
+          - mountPath: /opt/sisense/storage
+            name: storage
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      volumes:
+{{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+{{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+{{- end }}
+      - name: system-user-token
+        secret:
+          secretName: system-user-token
+      restartPolicy: Always
+      initContainers:
+      - name: init-configuration
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv configuration.{{ .Release.Namespace }} 3030 -w1; do echo waiting for configuration; sleep 2; done;']
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "usage.name" . }}
+  labels: {{- include "usage.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ template "usage.name" . }}
+  ports:
+    - name: tcp
+      protocol: TCP
+      port: 3040
+      targetPort: 3040
+    - name: monitoring-internal-http-rpc
+      protocol: TCP
+      port: 8457
+      targetPort: 8457
+    - name: usage-internal-http-rpc2
+      protocol: TCP
+      port: 8458
+      targetPort: 8458
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "monitoring.name" . }}
+  labels:
+    app: {{ template "monitoring.name" . }}
+spec:
+  selector:
+    app: {{ template "usage.name" . }}
+  ports:
+    - name: tcp
+      protocol: TCP
+      port: 8001
+      targetPort: 8001

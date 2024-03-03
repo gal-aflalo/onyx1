@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense Api-Gateway
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: api-gateway
+version: 1.0.0

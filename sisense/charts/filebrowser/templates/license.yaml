@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  LICENSE: |
+{{ .Files.Get "files/LICENSE" | indent 4}}
+kind: ConfigMap
+metadata:
+  name: 3rdparty-license2
+  labels: {{- include "filebrowser.labels" . | nindent 4 }}

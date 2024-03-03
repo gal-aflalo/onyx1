@@ -1,0 +1,16 @@
+{{ if or (not .Values.global.clusterMode.enabled) (eq "rook-ceph" (.Values.global.storageType |lower)) }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: grafana-{{ .Release.Namespace }}-db
+  labels:
+    app: grafana-{{ .Release.Namespace }}
+spec:
+  storageClassName: manual
+  capacity:
+    storage: "{{ .Values.grafanaDiskSize }}Gi"
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/opt/sisense/grafana/grafana-{{ .Release.Namespace }}"
+{{ end }}

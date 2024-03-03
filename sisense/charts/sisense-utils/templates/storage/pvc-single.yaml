@@ -1,0 +1,57 @@
+{{ if not .Values.global.clusterMode.enabled }}
+{{ if (.Values.global.mongodb).enabled | default true }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-mongodb-0
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mongodb
+spec:
+  storageClassName: manual
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mongodb
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "{{ .Values.singleMongodbDiskSize }}Gi"
+{{ end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-zookeeper-0
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: zookeeper
+spec:
+  storageClassName: manual
+  selector:
+    matchLabels:
+      app: zookeeper
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "{{ .Values.singleZookeeprDiskSize }}Gi"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-dgraph-0
+  namespace: {{ .Release.Namespace }}
+  labels:
+    dgraph: dgraph
+spec:
+  storageClassName: manual
+  selector:
+    matchLabels:
+      dgraph: dgraph
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "{{ .Values.singleDgraphDiskSize }}Gi"
+{{ end }}

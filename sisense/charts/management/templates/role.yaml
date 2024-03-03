@@ -1,0 +1,33 @@
+{{- if .Values.rbac.create }}
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "management.fullname" . }}
+  labels: {{- include "management.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["", "apps", "extensions"]
+    resources:
+      - endpoints
+      - persistentvolumeclaims
+      - replicationcontrollers
+      - secrets
+      - serviceaccounts
+      - services
+      - pods
+      - pods/log
+      - pods/exec
+      - crontabs
+      - secrets
+      - deployments
+      - statefulsets
+      - daemonsets
+      - services
+      - replicasets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "deletecollection"]
+  - apiGroups: ["batch", "extensions"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+{{- end -}}

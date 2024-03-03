@@ -1,0 +1,20 @@
+{{- if .Values.global.clusterMode.enabled }}
+{{- if .Values.podDisruptionBudget -}}
+{{- if .Capabilities.APIVersions.Has "policy/v1" }}
+apiVersion: policy/v1
+{{ else }}
+apiVersion: policy/v1beta1
+{{ end -}}
+kind: PodDisruptionBudget
+metadata:
+  labels: {{- include "dgraph-ha.labels" . | nindent 4 }}
+    component: {{ .Values.alpha.name }}
+  name: {{ template "dgraph.fullname" . }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "dgraph.name" . }}
+      release: {{ .Release.Name }}
+{{ toYaml .Values.podDisruptionBudget | indent 2 }}
+{{- end -}}
+{{- end }}

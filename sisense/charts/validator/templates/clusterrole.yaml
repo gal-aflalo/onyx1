@@ -1,0 +1,11 @@
+{{- if and .Values.rbac.create (or .Values.global.clusterVisibility (not (hasKey .Values.global "clusterVisibility"))) }}
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ template "validator.name" . }}-{{ .Release.Namespace }}
+  labels: {{- include "validator.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["", "batch"]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+{{- end -}}

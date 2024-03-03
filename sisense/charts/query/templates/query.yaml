@@ -1,0 +1,244 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "query.name" . }}
+  labels: {{- include "query.labels" . | nindent 4 }}
+spec:
+  replicas: {{ include "query.replicas" . }}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "query.name" . }}
+  template:
+    metadata:
+      labels: {{- include "query.labels" . | nindent 8 }}
+        {{- if .Values.global.exposeNodePorts.enabled }}
+        network_policy: bypass
+        {{- end }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "query.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - {{ include "query.name" . }}
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+    {{- end }}
+    {{- end }}
+        - name: EXTERNAL_ADDRESS
+          value: "query"
+        - name: MONGODB_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: DB_CONNECTION_STRING
+        - name: RABBITMQ_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: RABBITMQ_CONN_STRING
+        - name: RABBITMQ_MGMT_URL
+          value: "http://{{ .Release.Name }}-rabbitmq.$(NAMESPACE_NAME):15672"
+        - name: ZOOKEEPER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: ZOOKEEPER_CONN_STRING
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: NAMESPACE_NAME
+{{- if .Values.global.clusterMode.enabled }}
+        - name: SINGLE
+          value: "no"
+        - name: MINIKUBE
+          value: "no"
+{{- else }}
+        - name: MINIKUBE
+          value: "yes"
+        - name: SINGLE
+          value: "yes"
+{{- end }}
+        - name: FARMS_DIRECTORY
+          value: "/opt/sisense/storage/farms"
+        - name: MONETDB_IMAGE
+          value: "{{ .Values.global.imageRegistry }}/monetdb:{{ .Values.monetdb_image_tag }}"
+{{- if not .Values.global.offlineInstaller | default false }}
+        - name: MONETDB_V2_IMAGE
+          value: "{{ .Values.global.imageRegistry }}/monetdbv2:{{ .Values.monetdb_v2_image_tag }}"
+{{- end }}
+        - name: SERVICE_VERSION
+          value: "{{ .Values.image.tag }}"
+        - name: KUBE_STORAGE_TYPE
+          value: "{{ .Values.global.storageType | default "hostpath" }}"
+        - name: IS_OPENSHIFT
+          value: "{{ .Values.global.isOpenshift | default "false" }}"
+        {{- if eq .Values.global.storageType "fsx" }}
+        - name: FSX_DOCKER_IMAGE
+          value: "{{ .Values.global.imageRegistry }}/aws-fsx-csi-driver:{{ .Values.awsFsxCsiDriverVersion }}"
+        {{- end }}
+        {{- if .Values.global.imagePullSecrets }}
+        - name: DOCKER_SECRET
+        {{- range .Values.global.imagePullSecrets }}
+          value: {{ . }}
+        {{- end }}
+        {{- end }}
+        - name: BUSYBOX_DOCKER_IMAGE
+          value: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        - name: NEW_RELIC_APP_NAME
+          value: "query"
+        envFrom:
+        {{- if .Values.configMaps }}
+        - configMapRef:
+        {{- range .Values.configMaps }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        - secretRef:
+        {{- range .Values.secrets }}
+            name: {{ . }}
+        {{- end }}
+        {{- end }}
+        - configMapRef:
+            name: apm-configuration
+        - configMapRef:
+            name: global-configuration
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        name: {{ template "query.name" . }}
+        ports:
+        - containerPort: 8082
+        - containerPort: 9080
+        resources:
+          limits: 
+            cpu: {{ include "query.limits.cpu" . }}
+            memory: {{ include "query.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        livenessProbe:
+          httpGet:
+           path: /liveness
+           port: 8082
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+          periodSeconds: 20
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+           path: /liveness
+           port: 8082
+          initialDelaySeconds: 10
+          timeoutSeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        volumeMounts:
+        - mountPath: /opt/sisense/storage
+          name: storage
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      volumes:
+{{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+{{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+{{- end }}
+      restartPolicy: Always
+      initContainers:
+      - name: init-identity
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv identity.{{ .Release.Namespace }} 16006 -w1; do echo waiting for identity; sleep 2; done;']
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "query.name" . }}
+  labels: {{- include "query.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ template "query.name" . }}
+  ports:
+  - name: app
+    port: 8082
+    targetPort: 8082
+{{- if and (not .Values.global.clusterMode.enabled) (.Values.global.exposeNodePorts.enabled) }}
+    nodePort: 30084
+{{- end }}
+{{- if not .Values.global.exposeNodePorts.enabled }}
+    nodePort: null
+{{- end }}
+  - name: debug
+    port: 9080
+    targetPort: 9080
+{{- if and (not .Values.global.clusterMode.enabled) (.Values.global.exposeNodePorts.enabled) }}
+    nodePort: 30094
+{{- end }}
+{{- if not .Values.global.exposeNodePorts.enabled }}
+    nodePort: null
+{{- end }}
+
+{{- if .Values.global.exposeNodePorts.enabled }}
+  type: NodePort
+{{- else}}
+  type: ClusterIP
+{{- end}}

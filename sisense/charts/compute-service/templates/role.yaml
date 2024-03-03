@@ -1,0 +1,18 @@
+{{- if .Values.rbac.create }}
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "compute.fullname" . }}
+  namespace: {{ include "compute.namespace" . }}
+  labels: {{- include "compute.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: ["", "metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list", "create", "delete"]
+{{- end -}}

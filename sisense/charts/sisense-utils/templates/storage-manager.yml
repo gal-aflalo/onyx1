@@ -1,0 +1,109 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: storage-manager
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-upgrade, post-install
+    "helm.sh/hook-delete-policy": before-hook-creation
+    {{- if .Values.podAnnotations }}
+    {{- toYaml .Values.podAnnotations | nindent 4 }}
+    {{- end }}
+  labels: {{- include "sisense-utils.customlabels" . | nindent 4 }}
+    app: storage-manager
+    app.kubernetes.io/name: storage-manager
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    sisense-version: {{ include "sisense-utils.sisense.version" . }}
+spec:
+  parallelism: 1
+  completions: 1
+  backoffLimit: 0
+  template:
+    metadata:
+      name: storage-manager
+      labels: {{- include "sisense-utils.customlabels" . | nindent 8 }}
+        app: storage-manager
+        app.kubernetes.io/name: storage-manager
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        sisense-version: {{ include "sisense-utils.sisense.version" . }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{ toYaml .Values.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{ .Release.Name }}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      restartPolicy: OnFailure
+      containers:
+      - name: storage-manager
+        image: {{ .Values.global.imageRegistry }}/utilsbox:stable
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        env:
+        {{- if .Values.global.securityContext }}
+        - name: UID
+          value: {{ .Values.global.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.global.securityContext.runAsGroup | quote }}
+        {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"      
+        {{- end }}
+        {{- else if .Values.securityContext.runAsUser }}
+        - name: UID
+          value: {{ .Values.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.securityContext.runAsGroup  | quote }}   
+        {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"       
+        {{- end }}
+        {{- end }}
+        - name: delay
+          value: {{ .Values.storageManager.delay | quote }}
+        resources:
+          limits:
+            cpu: 500m
+            memory: 800Mi
+          requests:
+            cpu: 1m
+            memory: 5Mi
+        command:
+        - "/bin/sh"
+        - "-cx"
+        - "sleep ${delay} && find /opt/sisense/storage -maxdepth 1 -not -name '\\.*' \\( ! -user ${UID} -o ! -group ${GID} \\) -exec chown ${UID}:${GID} '{}' ';'"
+        - "sleep ${delay} && find /opt/sisense/storage -mindepth 2 -name '*' \\( ! -user ${UID} -o ! -group ${GID} \\) -exec chown ${UID}:${GID} '{}' ';'"
+        volumeMounts:
+        - mountPath: /opt/sisense/storage
+          name: storage
+      volumes:
+    {{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+    {{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+    {{- end }}
+    {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+    {{- end }}

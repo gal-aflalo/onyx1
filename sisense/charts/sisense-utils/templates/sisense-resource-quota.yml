@@ -1,0 +1,17 @@
+{{- if .Values.resourceQuota.enabled }}
+apiVersion: v1
+kind: ResourceQuota
+metadata: 
+  name: resource-quota
+  labels: {{- include "sisense-utils.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-upgrade, pre-install
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  hard:
+    requests.cpu: {{ .Values.resourceQuota.limits_cpu }}
+    requests.memory: {{ .Values.resourceQuota.limits_memory }}Gi
+    limits.cpu: {{ .Values.resourceQuota.limits_cpu }}
+    limits.memory: {{ .Values.resourceQuota.limits_memory }}Gi
+
+{{- end}}

@@ -1,0 +1,32 @@
+{{ if (.Values.global.keda).enabled | default false }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ template "identity.name" . }}-scaledobject
+spec:
+  scaleTargetRef:
+    name: {{ template "identity.name" . }}
+  pollingInterval: {{ .Values.keda.pollingInterval | int }}
+  maxReplicaCount: {{ .Values.keda.maxReplicaCount | int }}
+  minReplicaCount:  {{ .Values.keda.minReplicaCount | int }}
+  advanced:
+    restoreToOriginalReplicaCount: true
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          policies:
+            - type: Percent
+              value: {{ .Values.keda.scaleUpPercent | int }}
+              periodSeconds: 10
+        scaleDown:
+          stabilizationWindowSeconds: {{ .Values.keda.stabilizationWindowSeconds | int }}
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  triggers:
+  - type: cpu
+    metricType: Utilization
+    metadata:
+      value: "500"
+{{- end }}

@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense Oxygen
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: oxygen
+version: linux-latest

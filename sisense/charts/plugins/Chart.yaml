@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense plugins
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: plugins
+version: 1.0.0

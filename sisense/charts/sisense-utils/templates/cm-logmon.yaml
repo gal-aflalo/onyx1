@@ -1,0 +1,16 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: cm-logmon-{{ .Release.Namespace }}-env
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: fluentd
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  sisense_ownerid: {{ include "sisense-utils.ownerid" . }}
+  internal_logs: "{{ .Values.internal_logs }}"
+  internal_monitoring: "{{ (.Values.global.monitoring).internal | default .Values.internal_monitoring }}"
+  external_monitoring: "{{ (.Values.global.monitoring).external | default .Values.external_monitoring }}"
+  deployment_id: {{ default "deployment_id" .Values.deployment_id | b64enc | quote }}
+  license_id: {{ default "license_id" .Values.license_id | quote }}
+  monitoring_namespace: {{ .Values.monitoring_namespace }}

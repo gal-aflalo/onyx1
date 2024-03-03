@@ -1,0 +1,18 @@
+{{- if and .Values.rbac.create (or .Values.global.clusterVisibility (not (hasKey .Values.global "clusterVisibility"))) }}
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ template "management.fullname" . }}-monitoring-clusterrole
+  labels: {{- include "oxygen.labels" . | nindent 4 }}
+rules:
+- apiGroups: ["", "apps", "extensions"]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch", "patch"]
+- apiGroups: ["", "apps", "extensions"]
+  resources: ["pods"]
+  verbs: ["list", "delete", "deletecollection"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["fluentd-kinesis"]
+  verbs: ["get", "watch", "list", "patch"]
+{{- end -}}

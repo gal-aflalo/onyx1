@@ -1,0 +1,46 @@
+replicaCount: 1
+
+image:
+#  repository: silverwind/filebrowser
+  tag: v2.26.0
+  pullPolicy: IfNotPresent
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  seLinuxOptions:
+    level: "s0:c123,c456"
+  fsGroup: 1000
+
+resources_small:
+  limits:
+    cpu: 1000m
+    memory: 450Mi
+
+resources_large:
+  limits:
+    cpu: 1000m
+    memory: 1000Mi
+
+resources:
+  # limits:
+  #   cpu: 2
+  #   memory: 1200Mi
+  requests:
+    cpu: 2m
+    memory: 5Mi
+
+awsFsxCsiDriverVersion: v0.8.1
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+## StrategyType
+## Can be set to RollingUpdate or Recreate
+updateStrategy: {}

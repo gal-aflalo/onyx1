@@ -1,0 +1,16 @@
+{{- if .Values.global.clusterMode.enabled }}
+{{- if .Capabilities.APIVersions.Has "policy/v1" }}
+apiVersion: policy/v1
+{{ else }}
+apiVersion: policy/v1beta1
+{{ end -}}
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "admin-management.name" . }}
+  labels: {{- include "admin-management.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: {{ template "admin-management.name" . }}
+{{- end }}

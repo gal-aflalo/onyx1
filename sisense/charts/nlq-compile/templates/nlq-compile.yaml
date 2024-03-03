@@ -1,0 +1,184 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "nlq-compile.name" . }}
+  labels: {{- include "nlq-compile.labels" . | nindent 4 }}
+    {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+    nlq: "true"
+    {{- end }}
+spec:
+  replicas: {{ include "nlq-compile.replicas" . }}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- else if eq .Values.global.imageRegistry "docker.artifactory.sisense.com"}}
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ template "nlq-compile.name" . }}
+      {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+      nlq: "true"
+      {{- end }}
+  template:
+    metadata:
+      labels: {{- include "nlq-compile.labels" . | nindent 8 }}
+        {{- if not ( (.Values.global.onyx).enabled | default false ) }}
+        nlq: "true"
+        {{- end }}
+      {{- if .Values.podAnnotations }}
+      annotations: {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "nlq-compile.serviceAccountName" . }}
+      {{- if .Values.global.securityContext }}
+      securityContext:
+        runAsGroup: {{ .Values.global.securityContext.runAsGroup }}
+        runAsUser: {{ .Values.global.securityContext.runAsUser }}
+        fsGroup: {{ .Values.global.securityContext.fsGroup }}
+      {{- if and ( (.Values.global.securityContext.seLinuxOptions).level ) ( not (.Values.global.isOpenshift | default false) ) }}
+        seLinuxOptions:
+          level: {{ .Values.global.securityContext.seLinuxOptions.level }}
+      {{- end }}
+      {{- else if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- end }}
+      topologySpreadConstraints:
+        - labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - {{ include "nlq-compile.name" . }}
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+      {{- if .Values.affinity }}
+      affinity: {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.global.clusterMode.enabled }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: "node-{{.Release.Name}}-Application"
+                operator: In
+                values:
+                - "true"
+      {{- end }}
+      containers:
+      - env:
+    {{- if .Values.global.securityContext }}
+    {{- if ne (.Values.global.securityContext.runAsUser | toString) "1000" }}
+        - name: HOME
+          value: "/tmp"
+        - name: UID
+          value: {{ .Values.global.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.global.securityContext.runAsGroup | quote }}
+    {{- else }}
+        - name: UID
+          value: {{ .Values.global.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.global.securityContext.runAsGroup  | quote }}     
+    {{- end }}      
+    {{- else if .Values.securityContext.runAsUser }}
+    {{- if ne (.Values.securityContext.runAsUser| toString) "1000" }} 
+        - name: HOME
+          value: "/tmp"
+        - name: UID
+          value: {{ .Values.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.securityContext.runAsGroup  | quote }} 
+    {{- end }}               
+    {{- else }}
+        - name: UID
+          value: {{ .Values.securityContext.runAsUser | quote }}
+        - name: GID
+          value: {{ .Values.securityContext.runAsGroup  | quote }}     
+    {{- end }}
+        - name: NLQ_COMPILE_PORT
+          value: "9094"
+        - name: RABBITMQ_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: RABBITMQ_CONN_STRING
+        - name: ZOOKEEPER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: ZOOKEEPER_CONN_STRING
+        - name: TZ
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: TZ
+        - name: DGRAPH_URL
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: DGRAPH_URL
+        - name: SERVICE_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: global-configuration
+              key: SISENSE_VERSION
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: NLQ_STORAGE_DIR
+          value: "/opt/sisense/storage/nlq/"
+        image: "{{ .Values.global.imageRegistry }}/{{ .Chart.Name }}:{{ .Values.image.tag }}"
+        name: {{ template "nlq-compile.name" . }}
+        resources:
+          limits: 
+            cpu: {{ include "nlq-compile.limits.cpu" . }}
+            memory: {{ include "nlq-compile.limits.memory" . }}
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+        imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+        ports:
+        - containerPort: 9094
+        volumeMounts:
+        - name: storage
+          mountPath: /opt/sisense/storage
+      volumes:
+{{- if .Values.global.clusterMode.enabled }}
+      - name: storage
+        persistentVolumeClaim:
+          claimName: storage
+{{- else }}
+      - name: storage
+        hostPath:
+          path: /opt/sisense/storage
+          type: DirectoryOrCreate
+{{- end }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      restartPolicy: Always
+      initContainers:
+      - name: init-configuration
+        image: "{{ .Values.global.imageRegistry }}/utilsbox:stable"
+        command: ['sh', '-c', 'until nc -zv configuration.{{ .Release.Namespace }} 3030 -w1; do echo waiting for configuration; sleep 2; done;']
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "nlq-compile.name" . }}
+  labels: {{- include "nlq-compile.labels" . | nindent 4 }}
+spec:
+ type: ClusterIP
+ selector:
+  app: {{ template "nlq-compile.name" . }}
+ ports:
+  - name: tcp
+    port: 9094
+    targetPort: 9094

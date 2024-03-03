@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense storage
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: storage
+version: 1.0.0

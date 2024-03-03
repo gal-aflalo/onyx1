@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense model-logspersistence
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: model-logspersistence
+version: 1.0.0

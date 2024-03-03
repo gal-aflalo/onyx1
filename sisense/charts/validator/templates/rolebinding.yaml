@@ -1,0 +1,31 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ template "validator.name" . }}
+  labels: {{- include "validator.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ template "validator.name" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ template "validator.name" . }}
+
+{{- $monitoring := (lookup "v1" "Namespace" "" "monitoring" ) }}
+{{- if $monitoring }}
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ template "validator.name" . }}-{{ .Release.Namespace }}
+  namespace: monitoring
+  labels: {{- include "validator.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ template "validator.name" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ template "validator.name" . }}-{{ .Release.Namespace }}
+{{- end }} 

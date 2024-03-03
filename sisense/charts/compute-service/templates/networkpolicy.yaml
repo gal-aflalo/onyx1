@@ -1,0 +1,27 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: compute-instance-network-policy
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: compute-instance
+  egress:
+    - to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+      - podSelector:
+          matchLabels:
+            app: warehouse
+      ports:
+      - port: {{ .Values.networkPolicy.egress.ports.warehouse }}
+        protocol: TCP
+      - port: {{ .Values.networkPolicy.egress.ports.sslPort }}
+        protocol: TCP
+      - port: {{ .Values.networkPolicy.egress.ports.dnsPort }}
+        protocol: UDP
+  policyTypes:
+  - Egress
+{{- end }}

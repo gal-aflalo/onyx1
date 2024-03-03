@@ -1,0 +1,10 @@
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "ai-integration.serviceAccountName" . }}
+  labels: {{- include "ai-integration.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["", "apps", "extensions"]
+    resources: ["deployments"]
+    verbs: ["patch", "get", "list", "update"]
+

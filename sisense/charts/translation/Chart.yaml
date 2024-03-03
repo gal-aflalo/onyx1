@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense translation-service
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: translation
+version: 1.0.0

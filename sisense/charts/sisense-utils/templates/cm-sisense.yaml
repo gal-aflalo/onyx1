@@ -1,0 +1,51 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: global-configuration
+  labels: {{- include "sisense-utils.labels" . | nindent 4 }}
+data:
+  TZ: "{{ .Values.timezone }}"
+  SYSTEM_ALIAS: {{ include "sisense-utils.define.system.alias" . }}
+  NAMESPACE_NAME: "{{ .Release.Namespace }}"
+  WEBSERVER_HOST: "api-gateway.{{ .Release.Namespace }}"
+  OXYGEN_HOST: "oxygen.{{ .Release.Namespace }}"
+  OXYGEN_PORT: "31112"
+  QUERY_SERVICE_URL: "http://query:8082"
+  REPORTING_HOST: "api-gateway-internal.{{ .Release.Namespace }}"
+  REPORTING_PORT: "14991"
+  ENABLE_CLUSTER: "false"
+  NODE_ENV: "production"
+  USER_POOL_ID: {{ .Values.userPoolId | quote }}
+  USER_POOL_CLIENT_ID: {{ .Values.userPoolClientId | quote }}
+  ONYX_CLUSTER_URL: {{ .Values.onyxClusterUrl | quote }}
+  OS_IS_SERVER: "true"
+  SISENSE_VERSION: "{{ .Values.global.sisense_version }}"
+  IS_UPGRADE: {{ include "sisense.update" . | quote }}
+  IS_NEW_ARCHITECTURE: "true"
+  IS_KUBERNETES: "true"
+  IS_MANAGED: "{{ .Values.isManaged }}"
+  INTERNAL_RPC_PORT: "8457"
+  LOGS_PATH: "/var/log/sisense"
+  RABBITMQ_CONN_STRING: "amqp://guest:guest@{{ .Release.Name }}-rabbitmq.{{ .Release.Namespace }}:5672?heartbeat=10&frameMax=0"
+  ZOOKEEPER_CONN_STRING: "{{ .Release.Name }}-zookeeper.{{ .Release.Namespace }}:2181"
+  DISABLE_COLORS_LOG: "true"
+  DEFAULT_NODE_OPTIONS: '--max-http-header-size=65000'
+{{- if (.Values.dbConnectionString) }}
+  DB_CONNECTION_STRING: "{{ .Values.dbConnectionString }}"
+{{- else if and (.Values.global.clusterMode.enabled) (.Values.global.highAvailability) }}
+  DB_CONNECTION_STRING: "mongodb://{{ .Release.Name }}-mongodb-0.{{ .Release.Name }}-mongodb-headless.{{ .Release.Namespace }},{{ .Release.Name }}-mongodb-1.{{ .Release.Name }}-mongodb-headless.{{ .Release.Namespace }},{{ .Release.Name }}-mongodb-2.{{ .Release.Name }}-mongodb-headless.{{ .Release.Namespace }}:27017/?replicaSet=rs0"
+{{- else if and (.Values.global.clusterMode.enabled) (not .Values.global.highAvailability) }}
+  DB_CONNECTION_STRING: "mongodb://{{ .Release.Name }}-mongodb-0.{{ .Release.Name }}-mongodb-headless.{{ .Release.Namespace }}:27017/?replicaSet=rs0"
+{{- else }}
+  DB_CONNECTION_STRING: "mongodb://{{ .Release.Name }}-mongodb.{{ .Release.Namespace }}:27017"
+{{- end }}
+{{- if not ( (.Values.global.onyx).enabled | default false ) }}
+{{- if not .Values.global.clusterMode.enabled }}
+  DGRAPH_URL: "dgraph-public:9080"
+{{- else }}
+  DGRAPH_URL: "{{ .Release.Namespace }}-dgraph-alpha:9080"
+{{- end }}
+{{- end }}
+{{- if .Values.isMultiTenancy }}
+  IS_MULTI_TENANCY: "true"
+{{- end }}

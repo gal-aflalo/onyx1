@@ -1,0 +1,7 @@
+apiVersion: v1
+description: nlq-rt
+maintainers:
+- email: yaniv.setton@sisense.com
+  name: Yaniv Setton
+name: nlq-rt
+version: 11.0.1

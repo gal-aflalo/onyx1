@@ -1,0 +1,23 @@
+global:
+  external_kube_apiserver_address: "http://1.2.3.4:30845"
+  kube_apiserver_port: 6443
+  clusterMode:
+    enabled: false
+  repository: docker.artifactory.sisense.com
+  gateway_port: 30845
+  ssl:
+    enabled: false
+  expose_nodeports:
+    enabled: false
+  k8s_node_1: node1
+  kube_network_plugin: calico
+  isKubernetesCloud: false
+  kubernetesCloudProvider: ""
+  highAvailability: false
+  cloudLoadBalancer:
+    enabled: false
+  storageType: "hostPath"
+  kubernetes_version: v1.17.6
+  clusterAutoScaler:
+    enabled: false
+  serviceAccountAnnotations: {}

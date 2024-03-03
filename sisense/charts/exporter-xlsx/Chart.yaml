@@ -1,0 +1,7 @@
+apiVersion: v1
+description: Sisense exporter-xlsx
+maintainers:
+- email: devops@sisense.com
+  name: Sisense DevOps
+name: exporter-xlsx
+version: 1.0.0

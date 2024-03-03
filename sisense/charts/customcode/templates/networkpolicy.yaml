@@ -1,0 +1,37 @@
+{{- if and .Values.networkPolicy.enabled (not .Values.global.isOpenshift | default false) }}
+{{- if and (.Capabilities.APIVersions.Has "crd.projectcalico.org/v1") (ne .Values.global.clusterVisibility false) }}
+{{ include "customcode.calicoNetworkpolicy" . }}
+{{- else if and (.Capabilities.APIVersions.Has "crd.projectcalico.org/v3") (ne .Values.global.clusterVisibility false) }}
+{{ include "customcode.calicoNetworkpolicy" . }}
+{{- else }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: diag-network-policy
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ template "customcode.name" . }}
+  egress:
+    - to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+          except:
+            - 169.254.169.254/32
+      - podSelector:
+          matchLabels:
+            app: api-gateway
+      ports:
+      - port: {{ .Values.networkPolicy.egress.ports.apiGateway }}
+        protocol: TCP
+      - port: {{ .Values.networkPolicy.egress.ports.http }}
+        protocol: TCP
+      - port: {{ .Values.networkPolicy.egress.ports.sslPort }}
+        protocol: TCP
+      - port: {{ .Values.networkPolicy.egress.ports.dnsPort }}
+        protocol: UDP
+  policyTypes:
+  - Egress
+{{- end}}
+{{- end }}
