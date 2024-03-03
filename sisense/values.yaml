@@ -1,6 +1,13 @@
 ## @section Global parameters
 ##
 global:
+  sisense_version: onyx.441
+  build_connectors_image_tag: "onyx.438"
+  connectors_image_tag: onyx.310
+  monetdb_image_tag: "onyx.413"
+  monetdb_v2_image_tag: "onyx.310"
+  utils_image_tag: "onyx.374"
+
   ## @param global.external_kube_apiserver_address External Kubernetes API server address
   external_kube_apiserver_address: ""
   ## @param applicationDnsName Application DNS name
@@ -8,7 +15,7 @@ global:
   ## @param global.clusterMode.enabled Enable or disable cluster mode
   ## Enable if not single
   clusterMode:
-    enabled: false
+    enabled: true
   ## @param global.imageRegistry Global Docker image registry
   imageRegistry: quay.io/sisense
   ## @param global.imagePullSecrets Global Docker registry secret names as an array
@@ -30,9 +37,9 @@ global:
   ## @param global.kubeNetworkPlugin Kubernetes network plugin (e.g., calico, flannel)
   kubeNetworkPlugin: "calico"
    ## @param global.isKubernetesCloud Set to true if running on a Kubernetes cloud platform
-  isKubernetesCloud: false
+  isKubernetesCloud: true
   ## @param global.kubernetesCloudProvider Cloud provider for Kubernetes (if applicable - e.g., aws, gke, azure)
-  kubernetesCloudProvider: ""
+  kubernetesCloudProvider: "aws"
   ## @param gloabl.highAvailability Enable or disable high availability
   ## Load sisense service in active/active redundancy
   highAvailability: true
@@ -44,15 +51,15 @@ global:
   vpnMode: false
   ## @param global.cloudLoadBalancer Enable or disable cloud load balancer (internet facing load balancer) 
   cloudLoadBalancer:
-    enabled: false
+    enabled: true
     ## @param global.cloudLoadBalancer.isInternal Set to true for an internal cloud load balancer (internal load balancer)
     isInternal: false
   ## @param global.storageType Storage type (e.g., rook-ceph, nfs, azurefile, fsx, efs)
   ## Leave empty to use ReadWriteMany, ReadWriteOnce StorageClass
-  storageType: ""
+  storageType: "fsx"
   ## @param global.storageClass Storage class for persistent volumes
   ## manual, rwo_sc_name, gp2, ebs-sc, standard, default, aws-efs, nfs-client, rook-ceph-block, nfs-server
-  storageClass: manual
+  storageClass: gp2
   ## @param global.serviceAccountAnnotations Additional annotations for the service account
   serviceAccountAnnotations: {}
   ## @param global.enableWidgetDeltas Enable delta approach for shared dashboards/widgets
@@ -80,10 +87,12 @@ global:
   notifyOnUpgrade: true
   ## @param global.mongodb.enabled Enable to install MonogoDB chart
   mongodb:
-    enabled: false
+    enabled: true
   ## @param global.keda.enabled Enable to install KEDA (Kubernetes Event-driven Autoscaler) chart and ScaledObjects
   keda:
     enabled: false
+  onyx:
+    enabled: true
 
 ## @section KEDA parameters
 ##
@@ -131,10 +140,10 @@ mongodb:
   #      - name: datadir
   #        mountPath: /bitnami/mongodb
   ## @param architecture MongoDB cluster architecture (uncomment for cluster installation with high availability)
-  # architecture: replicaset
+  architecture: replicaset
   ## @param pdb MongoDB PodDisruptionBudget settings (uncomment on cluster installation with high availability)
-  # pdb:
-  #   create: true
+  pdb:
+    create: true
   ## @param metrics Enable or disable MongoDB metrics
   metrics:
     enabled: false
@@ -174,16 +183,16 @@ zookeeper:
     4lw.commands.whitelist=srvr, mntr, ruok
     maxSessionTimeout=40000
     server.1=sisense-zookeeper-0.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
-  # server.2=sisense-zookeeper-1.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
-  # server.3=sisense-zookeeper-2.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
+    server.2=sisense-zookeeper-1.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
+    server.3=sisense-zookeeper-2.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
   ## @param persistence Persistence settings for Zookeeper (uncomment for single installation)
   # persistence:
   #  existingClaim: data-zookeeper-0
   ## @param replicaCount Number of Zookeeper replicas (uncomment for cluster installation with high availability)
-  # replicaCount: 3
+  replicaCount: 3
   ## @param pdb Zookeeper PodDisruptionBudget settings (uncomment for cluster installation with high availability)
-  # pdb:
-  #   maxUnavailable: 2
+  pdb:
+    maxUnavailable: 2
   ## @param metrics Enable or disable Zookeeper metrics
   metrics:
    enabled: false
@@ -198,10 +207,10 @@ rabbitmq:
   containerSecurityContext:
     runAsUser: 1000
   ## @param replicaCount Number of RabbitMQ replicas (uncomment for cluster installation with high availability)
-  # replicaCount: 3
+  replicaCount: 3
   ## @param clustering Enable for cluster installation with high availability
   clustering:
-    enabled: false
+    enabled: true
   ## @param metrics Enable or disable RabbitMQ metrics
   metrics:
     enabled: false
@@ -219,9 +228,9 @@ grafana:
   ## @param adminPassword Admin password for Grafana (should be "passwd-{{namespace_name}}")
   adminPassword: "passwd-sisense"
   ## @param persistence Persistence settings for Grafana
-  persistence:
+  # persistence:
   ## @param storageClassName on cluster installation (e.g., rwo_sc_name, manual, standard, default, gp2, ebs-sc, aws-efs, nfs-client)
-  # storageClassName: 
+  storageClassName: gp2
   ## @param selectorLabels Selector labels for Grafana (uncomment for single or rook-ceph installation)
   # selectorLabels:
     ## should be "grafana-{{namespace_name}}"
@@ -258,19 +267,227 @@ grafana:
   #rbac:
   #  namespaced: true
   ## @param affinity Affinity settings for Grafana (uncomment on cluster installation)
-  #affinity:
-  #  nodeAffinity:
-  #    requiredDuringSchedulingIgnoredDuringExecution:
-  #      nodeSelectorTerms:
-  #      - matchExpressions:
-  #        - key: "node-sisense-Application"
-  #          operator: In
-  #          values:
-  #          - "true"
+  affinity:
+   nodeAffinity:
+     requiredDuringSchedulingIgnoredDuringExecution:
+       nodeSelectorTerms:
+       - matchExpressions:
+         - key: "node-sisense-Application"
+           operator: In
+           values:
+           - "true"
 
-storage:
-  git:
-    enabled: true
+
+sisense-utils:
+  azureCsi:
+    enabled: false
+  azureDefaultDiskSize: 1200
+  dbConnectionString: null
+  email_sending_block: false
+  fsxDnsName: "fs-0da458ecd804fe20b.fsx.eu-west-1.amazonaws.com"
+  fsxMountName: "rz2tfbev"
+  internal_logs: true
+  isManaged: false
+  monitoring_namespace: monitoring
+  resourceQuota:
+    enabled: false
+  resources:
+    limits:
+      cpu: 500m
+      memory: 750Mi
+  rwxScName: null
+  sisenseDiskSize: 70
+  timezone: UTC
 
 cloud360:
   allowCloud360: false
+  image:
+    tag: "onyx.374"
+
+## Sisense Variables
+usage:
+  image:
+    tag: "onyx.417"
+  csv_path: "/opt/sisense/storage/usage-service"
+  monitoring:
+    image:
+      tag: "onyx.374"
+
+configuration:
+  image:
+    tag: "onyx.439"
+
+reporting:
+  image:
+    tag: "onyx.374"
+
+oxygen:
+  image:
+    tag: "onyx.374"
+
+model-graphql:
+  image:
+    tag: "onyx.404"
+
+model-logspersistence:
+  image:
+    tag: "onyx.374"
+
+management:
+  monetdb_image_tag: "onyx.413"
+  monetdb_v2_image_tag: "onyx.310"
+  utils_image_tag: "onyx.374"
+  build_connectors_image_tag: "onyx.467"
+  custom_code_image_tag: "onyx.310"
+  image:
+    tag: "onyx.467"
+
+query:
+  monetdb_image_tag: "onyx.413"
+  monetdb_v2_image_tag: "onyx.310"
+  utils_image_tag: "onyx.374"
+  build_connectors_image_tag: "onyx.438"
+  image:
+    tag: "onyx.438"
+
+build:
+  monetdb_image_tag: "onyx.413"
+  monetdb_v2_image_tag: "onyx.310"
+  utils_image_tag: "onyx.374"
+  build_connectors_image_tag: "onyx.438"
+  custom_code_image_tag: "onyx.310"
+  image:
+    tag: "onyx.438"
+
+translation:
+  image:
+    tag: "onyx.310"
+
+analyticalengine:
+  image:
+    tag: "onyx.374"
+
+connectors:
+  image:
+    tag: "onyx.310"
+
+jobs:
+  image:
+    tag: "onyx.374"
+
+identity:
+  image:
+    tag: "onyx.400"
+
+infusion:
+  image:
+    tag: "onyx.374"
+
+galaxy:
+  image:
+    tag: "onyx.317"
+  formula:
+    image:
+      tag: "onyx.374"
+
+storage:
+  image:
+    tag: "onyx.374"
+  git:
+    enabled: true
+    image:
+      tag: "onyx.374"
+
+pivot2-be:
+  image:
+    tag: "onyx.374"
+
+exporter-xlsx:
+  image:
+    tag: "onyx.374"
+
+plugins:
+  image:
+    tag: "onyx.374"
+
+intelligence:
+  image:
+    tag: "onyx.374"
+
+api-gateway:
+  image:
+    tag: "onyx.441"
+
+customcode:
+  image:
+    tag: "onyx.310"
+
+warehouse:
+  image:
+    tag: "onyx.310"
+  warehouse_sels_url: https://sels.dec-staging.periscopedata.com
+  warehouse_dec_id: us-west-2.dec-staging.sisense.com
+  warehouse_dec_graphql_url: https://api-internal.dec-staging.periscopedata.com/graphql
+
+compute-service:
+  image:
+    tag: "onyx.374"
+
+
+external-plugins:
+  image:
+    tag: "onyx.7"
+
+quest:
+  image:
+    tag: "onyx.310"
+
+ai-integration:
+  image:
+    tag: "onyx.435"
+
+migration:
+  image:
+    tag: "onyx.430"
+
+monitoring:
+  image:
+    tag: "onyx.374"
+
+exporting:
+  image:
+    tag: "onyx.374"
+
+ai-services:
+  image:
+    tag: "onyx.433"
+
+sisense-slack-service:
+  image:
+    tag: "onyx.374"
+
+ms-teams-bot:
+  imagei:
+    tag: "onyx.374"
+
+sisense-one:
+  image:
+    tag: "onyx.374"
+
+admin-management:
+  image:
+    name: "onyx-backend"
+    tag: "onyx.403"
+
+dgraph:
+  enabled: false
+dgraph-ha:
+  enabled: false
+nlq-compile:
+  enabled: false
+nlq-duckling:
+  enabled: false
+nlq-rt:
+  enabled: false
+knowledgegraph:
+  enabled: false
