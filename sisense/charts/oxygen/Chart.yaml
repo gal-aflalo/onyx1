@@ -4,4 +4,4 @@ maintainers:
 - email: devops@sisense.com
   name: Sisense DevOps
 name: oxygen
-version: linux-latest
+version: 1.0.0
