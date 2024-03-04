@@ -65,12 +65,12 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
             - matchExpressions:
-              - key: "node-{{.Release.Name}}-Application"
+              - key: "node-{{ .Release.Namespace }}-Application"
                 operator: In
                 values:
                 - "true"
             - matchExpressions:
-              - key: "node-{{.Release.Name}}-Build"
+              - key: "node-{{ .Release.Namespace }}-Build"
                 operator: In
                 values:
                 - "true"

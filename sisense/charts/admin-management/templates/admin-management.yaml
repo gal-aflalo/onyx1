@@ -45,7 +45,7 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
             - matchExpressions:
-              - key: "node-{{ .Release.Name }}-Application"
+              - key: "node-{{ .Release.Namespace }}-Application"
                 operator: In
                 values:
                 - "true"
