@@ -182,9 +182,9 @@ zookeeper:
     quorumListenOnAllIPs=false
     4lw.commands.whitelist=srvr, mntr, ruok
     maxSessionTimeout=40000
-    server.1=sisense-zookeeper-0.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
-    server.2=sisense-zookeeper-1.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
-    server.3=sisense-zookeeper-2.sisense-zookeeper-headless.sisense.svc.cluster.local:2888:3888
+    server.1=onyx-zookeeper-0.onyx-zookeeper-headless.sisense.svc.cluster.local:2888:3888
+    server.2=onyx-zookeeper-1.onyx-zookeeper-headless.sisense.svc.cluster.local:2888:3888
+    server.3=onyx-zookeeper-2.onyx-zookeeper-headless.sisense.svc.cluster.local:2888:3888
   ## @param persistence Persistence settings for Zookeeper (uncomment for single installation)
   # persistence:
   #  existingClaim: data-zookeeper-0
