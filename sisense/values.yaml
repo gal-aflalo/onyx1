@@ -307,7 +307,7 @@ cloud360:
 ## Sisense Variables
 usage:
   image:
-    tag: "onyx.473"
+    tag: "onyx.417"
   csv_path: "/opt/sisense/storage/usage-service"
   monitoring:
     image:
