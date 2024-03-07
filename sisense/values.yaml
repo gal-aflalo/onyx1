@@ -284,8 +284,8 @@ sisense-utils:
   azureDefaultDiskSize: 1200
   dbConnectionString: null
   email_sending_block: false
-  fsxDnsName: "fs-0da458ecd804fe20b.fsx.eu-west-1.amazonaws.com"
-  fsxMountName: "rz2tfbev"
+  fsxDnsName: "fs-0f2d8df25494090f4.fsx.eu-west-1.amazonaws.com"
+  fsxMountName: ""
   internal_logs: true
   isManaged: false
   monitoring_namespace: monitoring
