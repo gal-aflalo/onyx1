@@ -224,7 +224,7 @@ model-graphql:
     tag: onyx.404
 model-logspersistence:
   image:
-    tag: onyx.374
+    tag: personal-onyx-93bf18b
 management:
   monetdb_image_tag: onyx.413
   monetdb_v2_image_tag: onyx.310
