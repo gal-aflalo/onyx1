@@ -1,5 +1,5 @@
 ## @section Global parameters
-##  TEST2
+##  TEST3
 global:
   sisense_version: onyx.441
   build_connectors_image_tag: onyx.438
