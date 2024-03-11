@@ -2,11 +2,11 @@
 ##
 global:
   sisense_version: onyx.441
-  build_connectors_image_tag: "onyx.438"
+  build_connectors_image_tag: onyx.438
   connectors_image_tag: onyx.310
-  monetdb_image_tag: "onyx.413"
-  monetdb_v2_image_tag: "onyx.310"
-  utils_image_tag: "onyx.374"
+  monetdb_image_tag: onyx.413
+  monetdb_v2_image_tag: onyx.310
+  utils_image_tag: onyx.374
 
   ## @param global.external_kube_apiserver_address External Kubernetes API server address
   external_kube_apiserver_address: ""
@@ -302,182 +302,182 @@ sisense-utils:
 cloud360:
   allowCloud360: false
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 ## Sisense Variables
 usage:
   image:
-    tag: "onyx.417"
+    tag: onyx.417
   csv_path: "/opt/sisense/storage/usage-service"
   monitoring:
     image:
-      tag: "onyx.374"
+      tag: onyx.374
 
 configuration:
   image:
-    tag: "onyx.439"
+    tag: onyx.439
 
 reporting:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 oxygen:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 model-graphql:
   image:
-    tag: "onyx.404"
+    tag: onyx.404
 
 model-logspersistence:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 management:
-  monetdb_image_tag: "onyx.413"
-  monetdb_v2_image_tag: "onyx.310"
-  utils_image_tag: "onyx.374"
-  build_connectors_image_tag: "onyx.467"
-  custom_code_image_tag: "onyx.310"
+  monetdb_image_tag: onyx.413
+  monetdb_v2_image_tag: onyx.310
+  utils_image_tag: onyx.374
+  build_connectors_image_tag: onyx.467
+  custom_code_image_tag: onyx.310
   image:
-    tag: "onyx.467"
+    tag: onyx.467
 
 query:
-  monetdb_image_tag: "onyx.413"
-  monetdb_v2_image_tag: "onyx.310"
-  utils_image_tag: "onyx.374"
-  build_connectors_image_tag: "onyx.438"
+  monetdb_image_tag: onyx.413
+  monetdb_v2_image_tag: onyx.310
+  utils_image_tag: onyx.374
+  build_connectors_image_tag: onyx.438
   image:
-    tag: "onyx.438"
+    tag: onyx.438
 
 build:
-  monetdb_image_tag: "onyx.413"
-  monetdb_v2_image_tag: "onyx.310"
-  utils_image_tag: "onyx.374"
-  build_connectors_image_tag: "onyx.438"
-  custom_code_image_tag: "onyx.310"
+  monetdb_image_tag: onyx.413
+  monetdb_v2_image_tag: onyx.310
+  utils_image_tag: onyx.374
+  build_connectors_image_tag: onyx.438
+  custom_code_image_tag: onyx.310
   image:
-    tag: "onyx.438"
+    tag: onyx.438
 
 translation:
   image:
-    tag: "onyx.310"
+    tag: onyx.310
 
 analyticalengine:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 connectors:
   image:
-    tag: "onyx.310"
+    tag: onyx.310
 
 jobs:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 identity:
   image:
-    tag: "onyx.400"
+    tag: onyx.400
 
 infusion:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 galaxy:
   image:
-    tag: "onyx.317"
+    tag: onyx.317
   formula:
     image:
-      tag: "onyx.374"
+      tag: onyx.374
 
 storage:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
   git:
     enabled: true
     image:
-      tag: "onyx.374"
+      tag: onyx.374
 
 pivot2-be:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 exporter-xlsx:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 plugins:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 intelligence:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 api-gateway:
   image:
-    tag: "onyx.441"
+    tag: onyx.441
 
 customcode:
   image:
-    tag: "onyx.310"
+    tag: onyx.310
 
 warehouse:
   image:
-    tag: "onyx.310"
+    tag: onyx.310
   warehouse_sels_url: https://sels.dec-staging.periscopedata.com
   warehouse_dec_id: us-west-2.dec-staging.sisense.com
   warehouse_dec_graphql_url: https://api-internal.dec-staging.periscopedata.com/graphql
 
 compute-service:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 
 external-plugins:
   image:
-    tag: "onyx.7"
+    tag: onyx.7
 
 quest:
   image:
-    tag: "onyx.310"
+    tag: onyx.310
 
 ai-integration:
   image:
-    tag: "onyx.435"
+    tag: onyx.435
 
 migration:
   image:
-    tag: "onyx.430"
+    tag: onyx.430
 
 monitoring:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 exporting:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 ai-services:
   image:
-    tag: "onyx.433"
+    tag: onyx.433
 
 sisense-slack-service:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 ms-teams-bot:
   imagei:
-    tag: "onyx.374"
+    tag: onyx.374
 
 sisense-one:
   image:
-    tag: "onyx.374"
+    tag: onyx.374
 
 admin-management:
   image:
-    name: "onyx-backend"
-    tag: "onyx.403"
+    name: onyx-backend
+    tag: onyx.403
 
 dgraph:
   enabled: false
