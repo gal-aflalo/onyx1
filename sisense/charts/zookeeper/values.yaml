@@ -39,6 +39,8 @@ extraDeploy: []
 ##
 commonLabels:
   release: sisense-prom-operator
+  argocd.argoproj.io/compare-options: IgnoreExtraneous
+
 ## @param commonAnnotations Add annotations to all the deployed resources
 ##
 commonAnnotations: {}
