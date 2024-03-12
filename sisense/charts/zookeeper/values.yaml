@@ -39,11 +39,11 @@ extraDeploy: []
 ##
 commonLabels:
   release: sisense-prom-operator
-  argocd.argoproj.io/compare-options: IgnoreExtraneous
 
 ## @param commonAnnotations Add annotations to all the deployed resources
 ##
-commonAnnotations: {}
+commonAnnotations:
+  argocd.argoproj.io/compare-options: IgnoreExtraneous
 ## @param namespaceOverride Override namespace for ZooKeeper resources
 ## Useful when including ZooKeeper as a chart dependency, so it can be released into a different namespace than the parent
 ##
