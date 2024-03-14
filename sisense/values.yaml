@@ -262,7 +262,7 @@ jobs:
     tag: onyx.374
 identity:
   image:
-    tag: personal-feature__ONYX-1466-7fbc424
+    tag: personal-feature__ONYX-1466-64fe6ba
 infusion:
   image:
     tag: onyx.374
