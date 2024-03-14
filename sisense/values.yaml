@@ -221,7 +221,7 @@ oxygen:
     tag: onyx.374
 model-graphql:
   image:
-    tag: personal-fix__modelStatisticsDefualtValueFix_onyx-e74cc95
+    tag: personal-FEAT__ONYX-1262_JoinRecommendationsReset_onyx-e46392d
 model-logspersistence:
   image:
     tag: personal-onyx-93bf18b
