@@ -314,7 +314,7 @@ quest:
     tag: onyx.310
 ai-integration:
   image:
-    tag: personal-cherry_pick_treacking_names_from_23.11.0-5b67987
+    tag: onyx.574
 migration:
   image:
     tag: onyx.430
