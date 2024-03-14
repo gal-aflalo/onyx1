@@ -314,7 +314,7 @@ quest:
     tag: onyx.310
 ai-integration:
   image:
-    tag: custom-onyx.849
+    tag: custom-onyx.850
 migration:
   image:
     tag: onyx.430
