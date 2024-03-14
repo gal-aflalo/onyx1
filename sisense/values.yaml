@@ -314,7 +314,7 @@ quest:
     tag: onyx.310
 ai-integration:
   image:
-    tag: personal-SNS-10416_onyx_fix-d3fcb2c
+    tag: custom-onyx.849
 migration:
   image:
     tag: onyx.430
