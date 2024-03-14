@@ -352,3 +352,6 @@ nlq-rt:
   enabled: false
 knowledgegraph:
   enabled: false
+onyx-backend:
+  image:
+    tag: personal-fix__stringified-cors-fe8058d
