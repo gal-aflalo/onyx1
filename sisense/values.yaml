@@ -326,7 +326,7 @@ exporting:
     tag: onyx.374
 ai-services:
   image:
-    tag: personal-add_script_to_config_atlas_vdb-e7a562d
+    tag: personal-add_script_to_config_atlas_vdb-caeeb29
 sisense-slack-service:
   image:
     tag: onyx.374
